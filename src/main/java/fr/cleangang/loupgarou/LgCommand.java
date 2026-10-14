@@ -14,7 +14,7 @@ import java.util.List;
 
 public final class LgCommand implements TabExecutor {
     private static final List<String> PLAYER_SUBS = List.of("join", "leave", "menu", "carte", "roles");
-    private static final List<String> ADMIN_SUBS = List.of("admin", "start", "stop", "skip", "setcenter", "setlobby", "reload");
+    private static final List<String> ADMIN_SUBS = List.of("admin", "slot", "start", "stop", "skip", "setcenter", "setlobby", "reload");
 
     private final LoupGarouPlugin plugin;
     private final Game game;
@@ -39,6 +39,22 @@ public final class LgCommand implements TabExecutor {
             case "leave" -> { if (requirePlayer(sender)) game.leave(player); }
             case "menu" -> { if (requirePlayer(sender)) game.reopenMenu(player); }
             case "carte", "card" -> { if (requirePlayer(sender)) game.showOwnCard(player); }
+            case "slot" -> {
+                if (args.length < 2) {
+                    sender.sendMessage(Component.text("Tête de loup : case " + (game.joinSlot() + 1)
+                            + " de la barre. Change avec /lg slot <1-9>.", NamedTextColor.YELLOW));
+                    return true;
+                }
+                int n = parse(args[1], -1);
+                if (n < 1 || n > 9) {
+                    sender.sendMessage(Component.text("Donne un numéro de case entre 1 et 9.", NamedTextColor.RED));
+                    return true;
+                }
+                plugin.getConfig().set("join-item.slot", n - 1);
+                plugin.saveConfig();
+                game.refreshAllJoinItems();
+                sender.sendMessage(Component.text("La tête de loup est maintenant dans la case " + n + ".", NamedTextColor.GREEN));
+            }
             case "admin" -> { if (requirePlayer(sender)) game.openAdmin(player); }
             case "start" -> {
                 if (player != null) game.startCountdown(player);
@@ -78,7 +94,7 @@ public final class LgCommand implements TabExecutor {
             default -> {
                 sender.sendMessage(Component.text("— Loup-Garou —", NamedTextColor.RED));
                 sender.sendMessage(Component.text("/lg join | leave | carte | menu | roles [n]", NamedTextColor.GRAY));
-                if (admin) sender.sendMessage(Component.text("/lg admin | start | stop | skip | setcenter | setlobby | reload", NamedTextColor.GRAY));
+                if (admin) sender.sendMessage(Component.text("/lg admin | slot <1-9> | start | stop | skip | setcenter | setlobby | reload", NamedTextColor.GRAY));
             }
         }
         return true;

@@ -152,9 +152,17 @@ public final class Game {
     }
 
     public void refreshJoinItemLater(Player p) {
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (p.isOnline()) refreshJoinItem(p);
-        }, 2L);
+        // 2 ticks puis 1 s : repasse après les autres plugins (hub, Find The Poulet...) qui remplissent la barre
+        for (long delay : new long[]{2L, 20L}) {
+            Bukkit.getScheduler().runTaskLater(plugin, () -> {
+                if (p.isOnline()) refreshJoinItem(p);
+            }, delay);
+        }
+    }
+
+    /** Case de la barre d'action (0-8) où va la tête de loup. */
+    public int joinSlot() {
+        return Math.max(0, Math.min(8, cfg().getInt("join-item.slot", 3)));
     }
 
     /** Donne / met à jour / retire la tête de loup selon le monde du joueur et son inscription. */
@@ -166,9 +174,15 @@ public final class Game {
         }
         if (!cfg().getBoolean("join-item.enabled", true) || !inJoinWorld(p)) return;
         org.bukkit.inventory.ItemStack item = Items.joinItem(isInGame(p));
-        int slot = Math.max(0, Math.min(8, cfg().getInt("join-item.slot", 3)));
-        if (inv.getItem(slot) == null || inv.getItem(slot).getType().isAir()) inv.setItem(slot, item);
-        else inv.addItem(item);
+        int slot = joinSlot();
+        org.bukkit.inventory.ItemStack occupant = inv.getItem(slot);
+        inv.setItem(slot, item);
+        // l'objet qui occupait la case est déplacé ailleurs (ou lâché au sol si l'inventaire est plein)
+        if (occupant != null && !occupant.getType().isAir()) {
+            for (org.bukkit.inventory.ItemStack rest : inv.addItem(occupant).values()) {
+                p.getWorld().dropItemNaturally(p.getLocation(), rest);
+            }
+        }
     }
 
     private boolean inJoinWorld(Player p) {
