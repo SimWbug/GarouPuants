@@ -3,6 +3,7 @@ package fr.cleangang.loupgarou.ui;
 import fr.cleangang.loupgarou.game.Role;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
+import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.format.TextDecoration;
 import org.bukkit.Bukkit;
 import org.bukkit.Color;
@@ -29,7 +30,7 @@ public final class Items {
         tagKey = key;
     }
 
-    public static Component plain(String text, NamedTextColor color) {
+    public static Component plain(String text, TextColor color) {
         return Component.text(text, color).decoration(TextDecoration.ITALIC, false);
     }
 
