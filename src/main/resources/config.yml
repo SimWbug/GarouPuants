@@ -9,7 +9,7 @@ max-players: 21
 join-item:
   enabled: true
   slot: 3            # 0 à 8 (3 = 4e case de la barre)
-  # Mondes où la tête est donnée. Vide = monde du lobby (/lg setlobby)
+  # Mondes où la tête est donnée (/lg slot monde ajoute le tien). Vide = monde du lobby, ou partout si aucun lobby.
   worlds: []
 
 # Les joueurs restent assis autour de la table pendant toute la partie
@@ -69,3 +69,4 @@ resource-pack:
 # Positions (remplies via /lg setcenter et /lg setlobby)
 table: null
 lobby: null
+lobby-world: ""

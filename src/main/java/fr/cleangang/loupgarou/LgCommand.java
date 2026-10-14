@@ -43,6 +43,26 @@ public final class LgCommand implements TabExecutor {
                 if (args.length < 2) {
                     sender.sendMessage(Component.text("Tête de loup : case " + (game.joinSlot() + 1)
                             + " de la barre. Change avec /lg slot <1-9>.", NamedTextColor.YELLOW));
+                    List<String> worlds = game.joinWorlds();
+                    sender.sendMessage(Component.text("Mondes : " + (worlds.isEmpty() ? "tous" : String.join(", ", worlds))
+                            + (plugin.getConfig().getBoolean("join-item.enabled", true) ? "" : " (désactivée !)"), NamedTextColor.GRAY));
+                    if (player != null) {
+                        sender.sendMessage(Component.text("Ton monde : " + player.getWorld().getName() + " → "
+                                + (game.inJoinWorld(player) ? "tête donnée ici" : "pas de tête ici (/lg slot monde pour l'ajouter)"),
+                                game.inJoinWorld(player) ? NamedTextColor.GREEN : NamedTextColor.RED));
+                    }
+                    return true;
+                }
+                if (args[1].equalsIgnoreCase("monde")) {
+                    if (!requirePlayer(sender)) return true;
+                    List<String> worlds = new ArrayList<>(plugin.getConfig().getStringList("join-item.worlds"));
+                    String w = player.getWorld().getName();
+                    if (worlds.stream().noneMatch(x -> x.equalsIgnoreCase(w))) worlds.add(w);
+                    plugin.getConfig().set("join-item.worlds", worlds);
+                    plugin.getConfig().set("join-item.enabled", true);
+                    plugin.saveConfig();
+                    game.refreshAllJoinItems();
+                    sender.sendMessage(Component.text("La tête de loup est maintenant donnée dans le monde " + w + ".", NamedTextColor.GREEN));
                     return true;
                 }
                 int n = parse(args[1], -1);
@@ -51,6 +71,7 @@ public final class LgCommand implements TabExecutor {
                     return true;
                 }
                 plugin.getConfig().set("join-item.slot", n - 1);
+                plugin.getConfig().set("join-item.enabled", true);
                 plugin.saveConfig();
                 game.refreshAllJoinItems();
                 sender.sendMessage(Component.text("La tête de loup est maintenant dans la case " + n + ".", NamedTextColor.GREEN));
@@ -77,6 +98,7 @@ public final class LgCommand implements TabExecutor {
             case "setlobby" -> {
                 if (!requirePlayer(sender)) return true;
                 plugin.getConfig().set("lobby", player.getLocation());
+                plugin.getConfig().set("lobby-world", player.getWorld().getName());
                 plugin.saveConfig();
                 game.refreshAllJoinItems();
                 sender.sendMessage(Component.text("Lobby enregistré.", NamedTextColor.GREEN));

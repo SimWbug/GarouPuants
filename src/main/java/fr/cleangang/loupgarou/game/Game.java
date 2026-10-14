@@ -169,14 +169,24 @@ public final class Game {
     public void refreshJoinItem(Player p) {
         if (isActive(p)) return; // en partie, le plugin gère l'inventaire
         var inv = p.getInventory();
+        boolean want = cfg().getBoolean("join-item.enabled", true) && inJoinWorld(p);
+        int slot = joinSlot();
+        org.bukkit.inventory.ItemStack expected = Items.joinItem(isInGame(p));
+
+        // déjà en place et à jour : on ne touche à rien (évite de faire clignoter la barre)
+        org.bukkit.inventory.ItemStack current = inv.getItem(slot);
+        if (want && current != null && current.isSimilar(expected)) {
+            for (int i = 0; i < inv.getSize(); i++) {
+                if (i != slot && Items.TAG_JOIN.equals(Items.tagOf(inv.getItem(i)))) inv.setItem(i, null);
+            }
+            return;
+        }
         for (int i = 0; i < inv.getSize(); i++) {
             if (Items.TAG_JOIN.equals(Items.tagOf(inv.getItem(i)))) inv.setItem(i, null);
         }
-        if (!cfg().getBoolean("join-item.enabled", true) || !inJoinWorld(p)) return;
-        org.bukkit.inventory.ItemStack item = Items.joinItem(isInGame(p));
-        int slot = joinSlot();
+        if (!want) return;
         org.bukkit.inventory.ItemStack occupant = inv.getItem(slot);
-        inv.setItem(slot, item);
+        inv.setItem(slot, expected);
         // l'objet qui occupait la case est déplacé ailleurs (ou lâché au sol si l'inventaire est plein)
         if (occupant != null && !occupant.getType().isAir()) {
             for (org.bukkit.inventory.ItemStack rest : inv.addItem(occupant).values()) {
@@ -185,13 +195,29 @@ public final class Game {
         }
     }
 
-    private boolean inJoinWorld(Player p) {
+    /**
+     * Mondes où la tête est donnée : liste join-item.worlds, sinon le monde du lobby (/lg setlobby),
+     * enregistré par son nom pour fonctionner même si le monde est chargé après le plugin (hub multimonde).
+     * Si rien n'est configuré, la tête est donnée partout.
+     */
+    public boolean inJoinWorld(Player p) {
         String world = p.getWorld().getName();
-        List<String> worlds = cfg().getStringList("join-item.worlds");
-        if (!worlds.isEmpty()) return worlds.stream().anyMatch(w -> w.equalsIgnoreCase(world));
-        Location lobby = cfg().getLocation("lobby");
-        if (lobby == null) lobby = cfg().getLocation("table");
-        return lobby != null && lobby.getWorld() != null && lobby.getWorld().getName().equals(world);
+        List<String> worlds = joinWorlds();
+        return worlds.isEmpty() || worlds.stream().anyMatch(w -> w.equalsIgnoreCase(world));
+    }
+
+    public List<String> joinWorlds() {
+        List<String> worlds = new ArrayList<>(cfg().getStringList("join-item.worlds"));
+        if (worlds.isEmpty()) {
+            String lobbyWorld = cfg().getString("lobby-world", "");
+            if (lobbyWorld != null && !lobbyWorld.isBlank()) worlds.add(lobbyWorld);
+        }
+        return worlds;
+    }
+
+    /** Vérification régulière : remet la tête si un autre plugin l'a retirée. */
+    public void startJoinItemWatcher() {
+        Bukkit.getScheduler().runTaskTimer(plugin, this::refreshAllJoinItems, 100L, 100L);
     }
 
     public void refreshAllJoinItems() {

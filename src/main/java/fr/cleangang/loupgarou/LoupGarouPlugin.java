@@ -35,6 +35,7 @@ public final class LoupGarouPlugin extends JavaPlugin {
             lg.setTabCompleter(command);
         }
         game.refreshAllJoinItems();
+        game.startJoinItemWatcher();
         getLogger().info("Loup-Garou prêt. /lg join pour rejoindre le village.");
     }
 
