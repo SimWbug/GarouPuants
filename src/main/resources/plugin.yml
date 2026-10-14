@@ -1,0 +1,18 @@
+name: LoupGarouMC
+version: '${version}'
+main: fr.cleangang.loupgarou.LoupGarouPlugin
+api-version: '1.21'
+description: Mini-jeu Loup-Garou avec cartes de rôle et menus custom
+authors: [Simon]
+
+commands:
+  lg:
+    description: Mini-jeu Loup-Garou
+    usage: /lg <join|leave|start|stop|setcenter|setlobby|menu|carte|roles|reload>
+    aliases: [loupgarou]
+
+permissions:
+  loupgarou.play:
+    default: true
+  loupgarou.admin:
+    default: op

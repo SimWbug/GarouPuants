@@ -1,0 +1,64 @@
+# ==========================================================
+#  LoupGarouMC — configuration
+# ==========================================================
+
+min-players: 5
+max-players: 21
+
+# Les joueurs restent assis autour de la table pendant toute la partie
+freeze-players: true
+
+# Quand un rôle est mort, le narrateur l'appelle quand même (durée aléatoire)
+# pour ne pas révéler qui est encore en vie.
+fake-steps-for-dead-roles: true
+
+# Rayon minimum du cercle autour de la table (s'agrandit avec le nombre de joueurs)
+table-radius: 4.0
+
+# Durées en secondes
+timers:
+  countdown: 10
+  distribution: 12
+  cupid: 30
+  lovers: 10
+  seer: 25
+  guard: 25
+  wolves: 45
+  witch: 30
+  discussion: 120
+  vote: 45
+  hunter: 20
+
+# Composition (réglable en jeu avec /lg admin)
+roles:
+  # auto = calculée selon le nombre de joueurs ; custom = nombres ci-dessous
+  mode: auto
+  # Mode custom : nombre de cartes par rôle. Les places restantes deviennent des Villageois.
+  custom:
+    loup_garou: 2
+    villageois: 0
+    voyante: 1
+    sorciere: 1
+    chasseur: 1
+    cupidon: 0
+    salvateur: 0
+  # --- Mode auto ---
+  # 1 loup-garou pour X joueurs (minimum 1)
+  players-per-wolf: 4
+  # Nombre minimum de joueurs pour ajouter le rôle (0 = désactivé)
+  voyante: 5
+  sorciere: 6
+  chasseur: 6
+  cupidon: 8
+  salvateur: 9
+
+# Resource pack (cartes + menus). Héberge le zip et colle son lien direct ici.
+# Laisse sha1 vide pour qu'il soit calculé automatiquement.
+resource-pack:
+  url: ""
+  sha1: ""
+  required: false
+
+# Positions (remplies via /lg setcenter et /lg setlobby)
+table: null
+lobby: null
