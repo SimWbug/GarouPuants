@@ -62,10 +62,12 @@ public final class LgCommand implements TabExecutor {
                 if (!requirePlayer(sender)) return true;
                 plugin.getConfig().set("lobby", player.getLocation());
                 plugin.saveConfig();
+                game.refreshAllJoinItems();
                 sender.sendMessage(Component.text("Lobby enregistré.", NamedTextColor.GREEN));
             }
             case "reload" -> {
                 plugin.reloadConfig();
+                game.refreshAllJoinItems();
                 sender.sendMessage(Component.text("Configuration rechargée.", NamedTextColor.GREEN));
             }
             case "roles" -> {

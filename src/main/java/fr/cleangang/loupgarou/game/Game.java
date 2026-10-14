@@ -139,6 +139,49 @@ public final class Game {
         if (lobby != null) p.teleport(lobby);
         broadcast(Component.text(p.getName() + " rejoint le village ", NamedTextColor.GREEN)
                 .append(Component.text("(" + players.size() + "/" + cfg().getInt("min-players", 5) + " min)", NamedTextColor.GRAY)));
+        sound(p, "entity.wolf.howl", 0.7f, 1f);
+        refreshJoinItemLater(p);
+    }
+
+    // ------------------------------------------------------------------ tête de loup (barre d'action)
+
+    /** Clic droit sur la tête de loup : rejoindre, ou quitter si déjà inscrit. */
+    public void toggleJoin(Player p) {
+        if (isInGame(p)) leave(p);
+        else join(p);
+    }
+
+    public void refreshJoinItemLater(Player p) {
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (p.isOnline()) refreshJoinItem(p);
+        }, 2L);
+    }
+
+    /** Donne / met à jour / retire la tête de loup selon le monde du joueur et son inscription. */
+    public void refreshJoinItem(Player p) {
+        if (isActive(p)) return; // en partie, le plugin gère l'inventaire
+        var inv = p.getInventory();
+        for (int i = 0; i < inv.getSize(); i++) {
+            if (Items.TAG_JOIN.equals(Items.tagOf(inv.getItem(i)))) inv.setItem(i, null);
+        }
+        if (!cfg().getBoolean("join-item.enabled", true) || !inJoinWorld(p)) return;
+        org.bukkit.inventory.ItemStack item = Items.joinItem(isInGame(p));
+        int slot = Math.max(0, Math.min(8, cfg().getInt("join-item.slot", 3)));
+        if (inv.getItem(slot) == null || inv.getItem(slot).getType().isAir()) inv.setItem(slot, item);
+        else inv.addItem(item);
+    }
+
+    private boolean inJoinWorld(Player p) {
+        String world = p.getWorld().getName();
+        List<String> worlds = cfg().getStringList("join-item.worlds");
+        if (!worlds.isEmpty()) return worlds.stream().anyMatch(w -> w.equalsIgnoreCase(world));
+        Location lobby = cfg().getLocation("lobby");
+        if (lobby == null) lobby = cfg().getLocation("table");
+        return lobby != null && lobby.getWorld() != null && lobby.getWorld().getName().equals(world);
+    }
+
+    public void refreshAllJoinItems() {
+        for (Player p : Bukkit.getOnlinePlayers()) refreshJoinItem(p);
     }
 
     public void leave(Player p) {
@@ -155,6 +198,8 @@ public final class Game {
         players.remove(p.getUniqueId());
         broadcast(Component.text(p.getName() + " quitte le village.", NamedTextColor.YELLOW));
         msg(p, Component.text("Tu as quitté la file d'attente.", NamedTextColor.YELLOW));
+        hideBossBar(p);
+        refreshJoinItemLater(p);
         if (state == State.STARTING && players.size() < cfg().getInt("min-players", 5)) {
             broadcast(Component.text("Pas assez de joueurs, lancement annulé.", NamedTextColor.RED));
             hideBossBar(p);
@@ -944,6 +989,7 @@ public final class Game {
         wolfVotes.clear();
         dayVotes.clear();
         cupidPicks.clear();
+        if (plugin.isEnabled()) Bukkit.getScheduler().runTaskLater(plugin, this::refreshAllJoinItems, 2L);
     }
 
     // ------------------------------------------------------------------ événements

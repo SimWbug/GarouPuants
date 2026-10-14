@@ -19,6 +19,10 @@ import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
+import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerChangedWorldEvent;
+import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerSwapHandItemsEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.InventoryHolder;
@@ -47,12 +51,12 @@ public final class GameListener implements Listener {
 
     @EventHandler(ignoreCancelled = true)
     public void onDrop(PlayerDropItemEvent e) {
-        if (game.isActive(e.getPlayer())) e.setCancelled(true);
+        if (game.isActive(e.getPlayer()) || Items.TAG_JOIN.equals(Items.tagOf(e.getItemDrop().getItemStack()))) e.setCancelled(true);
     }
 
     @EventHandler(ignoreCancelled = true)
     public void onSwap(PlayerSwapHandItemsEvent e) {
-        if (game.isActive(e.getPlayer())) e.setCancelled(true);
+        if (game.isActive(e.getPlayer()) || Items.TAG_JOIN.equals(Items.tagOf(e.getOffHandItem()))) e.setCancelled(true);
     }
 
     @EventHandler(ignoreCancelled = true)
@@ -68,8 +72,16 @@ public final class GameListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH)
     public void onInteract(PlayerInteractEvent e) {
         Player p = e.getPlayer();
-        if (!game.isActive(p)) return;
         String tag = Items.tagOf(e.getItem());
+        if (Items.TAG_JOIN.equals(tag)) {
+            e.setCancelled(true);
+            if (e.getHand() == EquipmentSlot.HAND
+                    && (e.getAction() == Action.RIGHT_CLICK_AIR || e.getAction() == Action.RIGHT_CLICK_BLOCK)) {
+                game.toggleJoin(p);
+            }
+            return;
+        }
+        if (!game.isActive(p)) return;
         if (tag == null) {
             if (e.getAction() == Action.RIGHT_CLICK_BLOCK) e.setCancelled(true); // pas de portes, coffres...
             return;
@@ -91,7 +103,15 @@ public final class GameListener implements Listener {
             }
             return;
         }
-        if (e.getWhoClicked() instanceof Player p && game.isActive(p)) e.setCancelled(true);
+        if (e.getWhoClicked() instanceof Player p && game.isActive(p)) {
+            e.setCancelled(true);
+            return;
+        }
+        // la tête de loup reste dans la barre d'action
+        if (Items.TAG_JOIN.equals(Items.tagOf(e.getCurrentItem())) || Items.TAG_JOIN.equals(Items.tagOf(e.getCursor()))
+                || (e.getHotbarButton() >= 0 && Items.TAG_JOIN.equals(Items.tagOf(e.getWhoClicked().getInventory().getItem(e.getHotbarButton()))))) {
+            e.setCancelled(true);
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGH)
@@ -118,5 +138,25 @@ public final class GameListener implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent e) {
         game.handleQuit(e.getPlayer());
+    }
+
+    @EventHandler
+    public void onJoin(PlayerJoinEvent e) {
+        game.refreshJoinItemLater(e.getPlayer());
+    }
+
+    @EventHandler
+    public void onWorldChange(PlayerChangedWorldEvent e) {
+        game.refreshJoinItemLater(e.getPlayer());
+    }
+
+    @EventHandler
+    public void onRespawn(PlayerRespawnEvent e) {
+        game.refreshJoinItemLater(e.getPlayer());
+    }
+
+    @EventHandler
+    public void onDeath(PlayerDeathEvent e) {
+        e.getDrops().removeIf(item -> Items.TAG_JOIN.equals(Items.tagOf(item)));
     }
 }

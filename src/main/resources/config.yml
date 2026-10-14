@@ -5,6 +5,13 @@
 min-players: 5
 max-players: 21
 
+# Tête de loup dans la barre d'action : clic droit pour rejoindre / quitter
+join-item:
+  enabled: true
+  slot: 3            # 0 à 8 (3 = 4e case de la barre)
+  # Mondes où la tête est donnée. Vide = monde du lobby (/lg setlobby)
+  worlds: []
+
 # Les joueurs restent assis autour de la table pendant toute la partie
 freeze-players: true
 

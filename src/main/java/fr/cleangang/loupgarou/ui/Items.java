@@ -22,6 +22,7 @@ import java.util.UUID;
 public final class Items {
     public static final String TAG_MENU = "menu";
     public static final String TAG_CARD = "card";
+    public static final String TAG_JOIN = "join";
     private static NamespacedKey tagKey;
 
     private Items() {}
@@ -82,6 +83,18 @@ public final class Items {
         meta.setItemModel(new NamespacedKey("lgt", "card_" + role.id()));
         item.setItemMeta(meta);
         return tag(item, TAG_CARD);
+    }
+
+    /** Tête de loup de la barre d'action : rejoindre (ou quitter, si déjà inscrit) la partie. */
+    public static ItemStack joinItem(boolean joined) {
+        ItemStack item = button(Material.BONE,
+                joined ? plain("Quitter le village", NamedTextColor.RED) : plain("Rejoindre le Loup-Garou", NamedTextColor.GOLD),
+                joined ? lore("Clic droit pour quitter la file d'attente.")
+                        : lore("Clic droit pour rejoindre la partie.", "Le village t'attend... les loups aussi."), !joined);
+        ItemMeta meta = item.getItemMeta();
+        meta.setItemModel(new NamespacedKey("lgt", joined ? "wolf_head_leave" : "wolf_head"));
+        item.setItemMeta(meta);
+        return tag(item, TAG_JOIN);
     }
 
     /** Carte de rôle pour le menu admin : quantité = nombre de cartes, dos de carte si 0. */

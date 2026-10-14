@@ -368,6 +368,41 @@ def make_role_sheet(ri, rid, title, team, color):
     return img
 
 
+def make_wolf_head(leave):
+    """Icône pixel art 16x16 d'une tête de loup (yeux rouges) ; croix rouge pour « quitter »."""
+    rows = [
+        "................",
+        ".DD..........DD.",
+        ".DPD........DPD.",
+        ".DPPD......DPPD.",
+        ".DGPGDDDDDDGPGD.",
+        ".DGGGGGGGGGGGGD.",
+        "DGGGLGGGGGGLGGGD",
+        "DGGRRGGGGGGRRGGD",
+        "DGGGGGLLLLGGGGGD",
+        ".DGGGLLLLLLGGGD.",
+        ".DGGLLLNNLLLGGD.",
+        "..DGLLLNNLLLGD..",
+        "..DDLLWLLWLLDD..",
+        "...DDLLLLLLDD...",
+        ".....DDDDDD.....",
+        "................",
+    ]
+    pal = {"D": (30, 30, 38), "G": (118, 118, 130), "L": (196, 196, 204), "P": (176, 96, 110),
+           "R": (230, 40, 40), "N": (20, 20, 24), "W": (255, 255, 255)}
+    img = Image.new("RGBA", (16, 16), (0, 0, 0, 0))
+    for y, row in enumerate(rows):
+        for x, ch in enumerate(row):
+            if ch in pal:
+                img.putpixel((x, y), pal[ch] + (255,))
+    if leave:
+        d = ImageDraw.Draw(img)
+        d.rectangle((9, 9, 15, 15), fill=(40, 10, 10))
+        d.line((10, 10, 14, 14), fill=(255, 70, 60))
+        d.line((14, 10, 10, 14), fill=(255, 70, 60))
+    return img
+
+
 def make_admin_gui(title, color):
     """Menu admin : 7 cartes de rôle (ligne 1), mode/raz (ligne 3), boutons (ligne 5), inventaire normal."""
     W, H = 176, 222
@@ -461,6 +496,14 @@ def main():
     write_json(os.path.join(OUT, "assets", NS, "models", "item", "card_back.json"),
                {"parent": "minecraft:item/generated", "textures": {"layer0": f"{NS}:item/card_back"}})
     write_json(os.path.join(OUT, "assets", NS, "font", "cards.json"), {"providers": providers})
+
+    # Tête de loup (rejoindre) et variante « quitter »
+    for name, img in (("wolf_head", make_wolf_head(False)), ("wolf_head_leave", make_wolf_head(True))):
+        img.save(os.path.join(tex, "item", name + ".png"))
+        write_json(os.path.join(OUT, "assets", NS, "models", "item", name + ".json"),
+                   {"parent": "minecraft:item/generated", "textures": {"layer0": f"{NS}:item/{name}"}})
+        write_json(os.path.join(OUT, "assets", NS, "items", name + ".json"),
+                   {"model": {"type": "minecraft:model", "model": f"{NS}:item/{name}"}})
 
     # Menus : glyphe 176x222, ascent 13 → aligné sur le coin haut-gauche du menu
     gui_prov = [{"type": "space", "advances": {"": -8}}]

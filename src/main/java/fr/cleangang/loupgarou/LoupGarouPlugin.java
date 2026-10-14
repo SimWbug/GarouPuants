@@ -34,12 +34,20 @@ public final class LoupGarouPlugin extends JavaPlugin {
             lg.setExecutor(command);
             lg.setTabCompleter(command);
         }
+        game.refreshAllJoinItems();
         getLogger().info("Loup-Garou prêt. /lg join pour rejoindre le village.");
     }
 
     @Override
     public void onDisable() {
         if (game != null) game.forceStop();
+        // retire les têtes de loup pour ne pas laisser d'objets orphelins
+        for (Player p : Bukkit.getOnlinePlayers()) {
+            var inv = p.getInventory();
+            for (int i = 0; i < inv.getSize(); i++) {
+                if (Items.TAG_JOIN.equals(Items.tagOf(inv.getItem(i)))) inv.setItem(i, null);
+            }
+        }
     }
 
     @Override
