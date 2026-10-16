@@ -1,6 +1,8 @@
 package fr.cleangang.loupgarou;
 
 import fr.cleangang.loupgarou.game.Game;
+import fr.cleangang.loupgarou.game.Role;
+import fr.cleangang.loupgarou.ui.TestMenus;
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.format.NamedTextColor;
 import org.bukkit.command.Command;
@@ -14,14 +16,16 @@ import java.util.List;
 
 public final class LgCommand implements TabExecutor {
     private static final List<String> PLAYER_SUBS = List.of("join", "leave", "menu", "carte", "roles");
-    private static final List<String> ADMIN_SUBS = List.of("admin", "slot", "start", "stop", "skip", "setcenter", "setlobby", "reload");
+    private static final List<String> ADMIN_SUBS = List.of("admin", "test", "slot", "start", "forcestart", "stop", "skip", "setcenter", "setlobby", "reload");
 
     private final LoupGarouPlugin plugin;
     private final Game game;
+    private final TestMenus tests;
 
     public LgCommand(LoupGarouPlugin plugin, Game game) {
         this.plugin = plugin;
         this.game = game;
+        this.tests = new TestMenus(plugin);
     }
 
     @Override
@@ -77,8 +81,13 @@ public final class LgCommand implements TabExecutor {
                 sender.sendMessage(Component.text("La tête de loup est maintenant dans la case " + n + ".", NamedTextColor.GREEN));
             }
             case "admin" -> { if (requirePlayer(sender)) game.openAdmin(player); }
+            case "forcestart" -> {
+                if (player != null) game.startCountdown(player, true);
+                else sender.sendMessage("Lance la commande en jeu.");
+            }
             case "start" -> {
-                if (player != null) game.startCountdown(player);
+                boolean force = args.length > 1 && args[1].equalsIgnoreCase("force");
+                if (player != null) game.startCountdown(player, force);
                 else sender.sendMessage("Lance la commande en jeu.");
             }
             case "stop" -> {
@@ -108,6 +117,39 @@ public final class LgCommand implements TabExecutor {
                 game.refreshAllJoinItems();
                 sender.sendMessage(Component.text("Configuration rechargée.", NamedTextColor.GREEN));
             }
+            case "test" -> {
+                if (!requirePlayer(sender)) return true;
+                if (args.length < 2) {
+                    sender.sendMessage(Component.text("/lg test <menu> [rôle | nombre de joueurs]", NamedTextColor.GOLD));
+                    sender.sendMessage(Component.text("Menus : " + String.join(", ", TestMenus.MENUS), NamedTextColor.GRAY));
+                    sender.sendMessage(Component.text("Ex. : /lg test vote 12 · /lg test fiche sorciere · /lg test carte loup_garou",
+                            NamedTextColor.GRAY));
+                    return true;
+                }
+                if (game.isActive(player)) {
+                    sender.sendMessage(Component.text("Impossible pendant une partie.", NamedTextColor.RED));
+                    return true;
+                }
+                if (args[1].equalsIgnoreCase("admin")) {
+                    game.openAdmin(player);
+                    return true;
+                }
+                String extra = args.length > 2 ? args[2] : null;
+                int count = 8;
+                String role = null;
+                if (extra != null) {
+                    try {
+                        count = Integer.parseInt(extra);
+                    } catch (NumberFormatException e) {
+                        role = extra;
+                    }
+                }
+                String error = tests.open(player, args[1], role, count);
+                if (error != null) sender.sendMessage(Component.text(error, NamedTextColor.RED));
+                else if (!args[1].equalsIgnoreCase("fermer") && !args[1].equalsIgnoreCase("carte")) {
+                    sender.sendMessage(Component.text("Menu de test ouvert : vise et clique · accroupis-toi pour fermer.", NamedTextColor.GRAY));
+                }
+            }
             case "roles" -> {
                 int n = args.length > 1 ? parse(args[1], game.playerCount()) : Math.max(game.playerCount(), plugin.getConfig().getInt("min-players", 5));
                 sender.sendMessage(Component.text("Composition pour " + n + " joueurs : ", NamedTextColor.GOLD)
@@ -116,7 +158,7 @@ public final class LgCommand implements TabExecutor {
             default -> {
                 sender.sendMessage(Component.text("— Loup-Garou —", NamedTextColor.RED));
                 sender.sendMessage(Component.text("/lg join | leave | carte | menu | roles [n]", NamedTextColor.GRAY));
-                if (admin) sender.sendMessage(Component.text("/lg admin | slot <1-9> | start | stop | skip | setcenter | setlobby | reload", NamedTextColor.GRAY));
+                if (admin) sender.sendMessage(Component.text("/lg admin | test <menu> | slot <1-9> | start | forcestart | stop | skip | setcenter | setlobby | reload", NamedTextColor.GRAY));
             }
         }
         return true;
@@ -143,6 +185,16 @@ public final class LgCommand implements TabExecutor {
             List<String> all = new ArrayList<>(PLAYER_SUBS);
             if (sender.hasPermission("loupgarou.admin")) all.addAll(ADMIN_SUBS);
             for (String s : all) if (s.startsWith(args[0].toLowerCase())) out.add(s);
+        } else if (args[0].equalsIgnoreCase("test") && sender.hasPermission("loupgarou.admin")) {
+            if (args.length == 2) {
+                for (String s : TestMenus.MENUS) if (s.startsWith(args[1].toLowerCase())) out.add(s);
+            } else if (args.length == 3) {
+                if (args[1].equalsIgnoreCase("fiche") || args[1].equalsIgnoreCase("carte")) {
+                    for (Role r : Role.values()) if (r.id().startsWith(args[2].toLowerCase())) out.add(r.id());
+                } else {
+                    for (String n : List.of("3", "8", "12", "21")) if (n.startsWith(args[2])) out.add(n);
+                }
+            }
         }
         return out;
     }

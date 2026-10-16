@@ -61,6 +61,7 @@ public final class Game {
 
     private volatile State state = State.LOBBY;
     private volatile Phase phase = Phase.NONE;
+    private boolean forced;
 
     // minuterie de phase
     private BukkitTask ticker;
@@ -241,7 +242,7 @@ public final class Game {
         msg(p, Component.text("Tu as quitté la file d'attente.", NamedTextColor.YELLOW));
         hideBossBar(p);
         refreshJoinItemLater(p);
-        if (state == State.STARTING && players.size() < cfg().getInt("min-players", 5)) {
+        if (state == State.STARTING && (players.isEmpty() || (!forced && players.size() < cfg().getInt("min-players", 5)))) {
             broadcast(Component.text("Pas assez de joueurs, lancement annulé.", NamedTextColor.RED));
             hideBossBar(p);
             reset();
@@ -249,20 +250,39 @@ public final class Game {
     }
 
     public void startCountdown(Player requester) {
+        startCountdown(requester, false);
+    }
+
+    /**
+     * @param force ignore le nombre minimum de joueurs et les vérifications de composition
+     *              (pour tester à 1 ou 2). La partie se termine normalement dès qu'un camp gagne.
+     */
+    public void startCountdown(Player requester, boolean force) {
         int min = cfg().getInt("min-players", 5);
         if (state != State.LOBBY) {
             msg(requester, Component.text("Une partie est déjà lancée.", NamedTextColor.RED));
             return;
         }
-        if (players.size() < min) {
-            msg(requester, Component.text("Il faut au moins " + min + " joueurs (" + players.size() + " inscrits).", NamedTextColor.RED));
+        if (players.isEmpty()) {
+            msg(requester, Component.text("Personne n'est inscrit. Fais /lg join (ou clic droit sur la tête de loup) avant de lancer.",
+                    NamedTextColor.RED));
             return;
         }
-        String error = compositionError(players.size());
-        if (error != null) {
-            msg(requester, Component.text(error + " Ajuste la composition avec /lg admin.", NamedTextColor.RED));
-            return;
+        if (!force) {
+            if (players.size() < min) {
+                msg(requester, Component.text("Il faut au moins " + min + " joueurs (" + players.size()
+                        + " inscrits). Pour tester quand même : /lg forcestart", NamedTextColor.RED));
+                return;
+            }
+            String error = compositionError(players.size());
+            if (error != null) {
+                msg(requester, Component.text(error + " Ajuste la composition avec /lg admin, ou /lg forcestart pour tester.",
+                        NamedTextColor.RED));
+                return;
+            }
         }
+        forced = force;
+        if (force) broadcast(Component.text("Lancement forcé par " + requester.getName() + " (mode test).", NamedTextColor.GOLD));
         state = State.STARTING;
         startTicker();
         runPhase(Phase.COUNTDOWN, Component.text("La partie commence", NamedTextColor.GOLD),
@@ -274,7 +294,7 @@ public final class Game {
     private void begin() {
         players.values().removeIf(gp -> gp.player() == null);
         int n = players.size();
-        if (n < cfg().getInt("min-players", 5)) {
+        if (n == 0 || (!forced && n < cfg().getInt("min-players", 5))) {
             broadcast(Component.text("Pas assez de joueurs connectés, lancement annulé.", NamedTextColor.RED));
             reset();
             return;
@@ -282,7 +302,7 @@ public final class Game {
 
         List<GamePlayer> list = new ArrayList<>(players.values());
         Collections.shuffle(list);
-        String error = compositionError(n);
+        String error = forced ? null : compositionError(n);
         if (error != null) {
             broadcast(Component.text("Lancement annulé : " + error, NamedTextColor.RED));
             reset();
@@ -1031,6 +1051,7 @@ public final class Game {
         wolfVotes.clear();
         dayVotes.clear();
         cupidPicks.clear();
+        forced = false;
         if (plugin.isEnabled()) Bukkit.getScheduler().runTaskLater(plugin, this::refreshAllJoinItems, 2L);
     }
 
@@ -1042,7 +1063,7 @@ public final class Game {
         if (state == State.LOBBY || state == State.STARTING) {
             players.remove(p.getUniqueId());
             hideBossBar(p);
-            if (state == State.STARTING && players.size() < cfg().getInt("min-players", 5)) {
+            if (state == State.STARTING && (players.isEmpty() || (!forced && players.size() < cfg().getInt("min-players", 5)))) {
                 broadcast(Component.text("Pas assez de joueurs, lancement annulé.", NamedTextColor.RED));
                 reset();
             }
@@ -1268,13 +1289,19 @@ public final class Game {
         });
 
         boolean running = state != State.LOBBY;
-        m.set(LgMenu.LEFT_BUTTON, Items.button(running ? Material.GRAY_DYE : Material.LIME_DYE,
-                Items.plain("Lancer la partie", running ? NamedTextColor.DARK_GRAY : NamedTextColor.GREEN),
-                Items.lore(running ? "Une partie est déjà en cours." : n + " joueur(s) inscrit(s)."), false), () -> {
+        boolean needForce = !running && (n < cfg().getInt("min-players", 5) || compositionError(Math.max(1, n)) != null);
+        List<Component> startLore = running ? Items.lore("Une partie est déjà en cours.")
+                : n == 0 ? Items.lore("Personne n'est inscrit.", "Fais /lg join d'abord.")
+                : needForce ? Items.lore(n + " joueur(s) inscrit(s).", "Pas assez de joueurs ou composition", "invalide : lancement en mode test.")
+                : Items.lore(n + " joueur(s) inscrit(s).");
+        m.set(LgMenu.LEFT_BUTTON, Items.button(running || n == 0 ? Material.GRAY_DYE : needForce ? Material.ORANGE_DYE : Material.LIME_DYE,
+                Items.plain(needForce && n > 0 ? "Forcer le lancement (test)" : "Lancer la partie",
+                        running || n == 0 ? NamedTextColor.DARK_GRAY : needForce ? NamedTextColor.GOLD : NamedTextColor.GREEN),
+                startLore, false), () -> {
             if (state != State.LOBBY) return;
             later(() -> {
                 admin.closeInventory();
-                startCountdown(admin);
+                startCountdown(admin, needForce);
             });
         });
         m.set(LgMenu.MIDDLE_BUTTON, Items.button(Material.BARRIER, Items.plain("Fermer", NamedTextColor.RED), null, false),

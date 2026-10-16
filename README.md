@@ -27,7 +27,8 @@ menus de vote avec fond custom, nuits/jours narrés, chat de la meute, morts en 
 | `/lg menu` | Rouvrir le menu d'action (ou clic droit sur l'étoile) |
 | `/lg roles [n]` | Composition prévue pour n joueurs |
 | `/lg admin` | Admin : menu de composition (nombre de cartes par rôle, mode auto/manuel, lancer/arrêter) |
-| `/lg start` · `stop` · `skip` | Admin : lancer, arrêter, passer la phase |
+| `/lg test <menu> [rôle\|nombre]` | Admin : ouvre une interface hors partie avec de faux joueurs (vote, loups, voyante, sorciere, cupidon, chasseur, salvateur, fiche, carte, admin, fermer) |
+| `/lg start` · `forcestart` · `stop` · `skip` | Admin : lancer, forcer (test à 1-2 joueurs), arrêter, passer la phase |
 | `/lg setcenter` · `setlobby` · `reload` | Admin : configuration |
 
 Permission admin : `loupgarou.admin` (op par défaut).
