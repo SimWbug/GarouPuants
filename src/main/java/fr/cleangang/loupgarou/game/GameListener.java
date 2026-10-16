@@ -1,5 +1,6 @@
 package fr.cleangang.loupgarou.game;
 
+import fr.cleangang.loupgarou.ui.HoloMenu;
 import fr.cleangang.loupgarou.ui.Items;
 import fr.cleangang.loupgarou.ui.LgMenu;
 import io.papermc.paper.event.player.AsyncChatEvent;
@@ -17,6 +18,10 @@ import org.bukkit.event.inventory.InventoryCloseEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
+import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.event.player.PlayerAnimationEvent;
+import org.bukkit.event.player.PlayerAnimationType;
+import org.bukkit.event.player.PlayerToggleSneakEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
@@ -72,6 +77,14 @@ public final class GameListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH)
     public void onInteract(PlayerInteractEvent e) {
         Player p = e.getPlayer();
+        HoloMenu holo = HoloMenu.get(p);
+        if (holo != null) {
+            boolean right = e.getAction() == Action.RIGHT_CLICK_AIR || e.getAction() == Action.RIGHT_CLICK_BLOCK;
+            if (e.getAction() != Action.PHYSICAL && holo.click(right)) {
+                e.setCancelled(true);
+                return;
+            }
+        }
         String tag = Items.tagOf(e.getItem());
         if (Items.TAG_JOIN.equals(tag)) {
             e.setCancelled(true);
@@ -91,6 +104,26 @@ public final class GameListener implements Listener {
         if (e.getAction() == Action.RIGHT_CLICK_AIR || e.getAction() == Action.RIGHT_CLICK_BLOCK) {
             game.useItem(p, tag);
         }
+    }
+
+    /** Clic gauche dans le vide : le joueur balance le bras. */
+    @EventHandler
+    public void onSwing(PlayerAnimationEvent e) {
+        if (e.getAnimationType() != PlayerAnimationType.ARM_SWING) return;
+        HoloMenu holo = HoloMenu.get(e.getPlayer());
+        if (holo != null) holo.click(false);
+    }
+
+    /** Clic droit sur un joueur placé derrière le menu. */
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onInteractEntity(PlayerInteractEntityEvent e) {
+        HoloMenu holo = HoloMenu.get(e.getPlayer());
+        if (holo != null && holo.click(true)) e.setCancelled(true);
+    }
+
+    @EventHandler
+    public void onSneak(PlayerToggleSneakEvent e) {
+        if (e.isSneaking()) game.handleSneak(e.getPlayer());
     }
 
     @EventHandler(priority = EventPriority.HIGH)
@@ -138,6 +171,7 @@ public final class GameListener implements Listener {
     @EventHandler
     public void onQuit(PlayerQuitEvent e) {
         game.handleQuit(e.getPlayer());
+        HoloMenu.close(e.getPlayer());
     }
 
     @EventHandler

@@ -2,6 +2,7 @@ package fr.cleangang.loupgarou.game;
 
 import fr.cleangang.loupgarou.LoupGarouPlugin;
 import fr.cleangang.loupgarou.ui.CardAnimator;
+import fr.cleangang.loupgarou.ui.HoloMenu;
 import fr.cleangang.loupgarou.ui.Items;
 import fr.cleangang.loupgarou.ui.LgMenu;
 import fr.cleangang.loupgarou.ui.MenuTheme;
@@ -569,7 +570,7 @@ public final class Game {
             Player pl = seer.player();
             later(() -> {
                 if (pl == null) return;
-                pl.closeInventory();
+                HoloMenu.close(pl);
                 CardAnimator.reveal(plugin, pl, gp.role, Component.text(gp.name() + " est " + gp.role.displayName(), gp.role.color()));
                 msg(pl, Component.text("Ta vision : " + gp.name() + " est ", NamedTextColor.LIGHT_PURPLE)
                         .append(Component.text(gp.role.displayName(), gp.role.color())));
@@ -895,6 +896,7 @@ public final class Game {
 
     private void makeSpectator(Player p) {
         blind(p, false);
+        HoloMenu.close(p);
         p.closeInventory();
         p.setGameMode(GameMode.SPECTATOR);
         msg(p, Component.text("Tu es mort. Tu peux observer la partie ; ton chat n'est visible que des morts.", NamedTextColor.GRAY));
@@ -1049,6 +1051,7 @@ public final class Game {
         if (gp.left) return;
         gp.left = true;
         menus.remove(p.getUniqueId());
+        HoloMenu.close(p);
         hideBossBar(p);
         if (gp.snapshot != null) gp.snapshot.restore(p);
         if (state == State.PLAYING && gp.alive) {
@@ -1126,21 +1129,45 @@ public final class Game {
         }
     }
 
-    /** Fiche custom du rôle. Cliquer sur la carte (colonnes 0-3) la retourne en grand à l'écran. */
+    /** Fiche du rôle en 3D : grande carte à gauche, explications à droite. Viser la carte et cliquer la retourne. */
     private void openRoleSheet(Player p, GamePlayer gp) {
-        LgMenu sheet = new LgMenu(MenuTheme.VOTE, fr.cleangang.loupgarou.ui.Glyphs.roleSheetTitle(gp.role), m -> {
-            for (int row = 0; row < 6; row++) {
-                for (int col = 0; col < 4; col++) {
-                    m.set(row * 9 + col, null, () -> later(() -> {
-                        p.closeInventory();
-                        CardAnimator.reveal(plugin, p, gp.role, Component.text(gp.role.displayName(), gp.role.color()));
+        if (p.hasPotionEffect(PotionEffectType.BLINDNESS)) {
+            // la nuit, l'aveuglement masque les menus 3D : on montre juste la carte à l'écran
+            CardAnimator.reveal(plugin, p, gp.role, Component.text(gp.role.displayName(), gp.role.color()));
+            return;
+        }
+        Role role = gp.role;
+        LgMenu sheet = new LgMenu(MenuTheme.SHEET, Component.text("Ta carte"), m -> {
+            m.set(LgMenu.SHEET_CARD, Items.cardFront(role, List.of(Items.plain("Clique pour la retourner", NamedTextColor.GRAY))),
+                    () -> later(() -> {
+                        HoloMenu.close(p);
+                        CardAnimator.reveal(plugin, p, role, Component.text(role.displayName(), role.color()));
                     }));
+            List<Component> lore = new ArrayList<>();
+            lore.add(Items.plain(role.team() == Role.Team.WOLVES ? "CAMP DES LOUPS" : "CAMP DU VILLAGE",
+                    role.team() == Role.Team.WOLVES ? NamedTextColor.RED : NamedTextColor.GOLD));
+            lore.add(Component.empty());
+            lore.add(Items.plain("POUVOIR", NamedTextColor.GOLD));
+            lore.add(Items.plain(role.description(), NamedTextColor.WHITE));
+            lore.add(Component.empty());
+            lore.add(Items.plain("OBJECTIF", NamedTextColor.GOLD));
+            lore.add(Items.plain(role.goal(), NamedTextColor.WHITE));
+            if (gp.lover != null) {
+                GamePlayer lover = players.get(gp.lover);
+                if (lover != null) {
+                    lore.add(Component.empty());
+                    lore.add(Items.plain("♥ Amoureux de " + lover.name(), Role.CUPIDON.color()));
                 }
             }
+            lore.add(Component.empty());
+            lore.add(Items.plain("Ne montre ta carte à personne !", NamedTextColor.GRAY));
+            m.set(LgMenu.INFO_SLOT, Items.button(Material.PAPER, Component.text(role.displayName().toUpperCase(), role.color()),
+                    lore, false), null);
+            m.set(LgMenu.MIDDLE_BUTTON, Items.button(Material.BARRIER, Items.plain("Fermer", NamedTextColor.RED), null, false),
+                    () -> later(() -> HoloMenu.close(p)));
         });
         sound(p, "item.book.page_turn", 1f, 1f);
-        p.getInventory().clear();
-        p.openInventory(sheet.getInventory());
+        HoloMenu.open(p, sheet, this::handleMenuClick);
     }
 
     public void reopenMenu(Player p) {
@@ -1150,8 +1177,7 @@ public final class Game {
             return;
         }
         menu.render();
-        p.getInventory().clear();
-        p.openInventory(menu.getInventory());
+        HoloMenu.open(p, menu, this::handleMenuClick);
     }
 
     public void showOwnCard(Player p) {
@@ -1279,9 +1305,17 @@ public final class Game {
 
     private void open(Player p, LgMenu menu) {
         menus.put(p.getUniqueId(), menu);
-        // Inventaire vidé pendant le menu : le fond custom recouvre cette zone
-        p.getInventory().clear();
-        p.openInventory(menu.getInventory());
+        HoloMenu.open(p, menu, this::handleMenuClick);
+    }
+
+    /** S'accroupir ferme le menu 3D (l'étoile ou /lg menu le rouvre). */
+    public void handleSneak(Player p) {
+        if (!HoloMenu.isOpen(p)) return;
+        HoloMenu.close(p);
+        sound(p, "block.amethyst_block.step", 0.6f, 0.8f);
+        if (menus.containsKey(p.getUniqueId())) {
+            p.sendActionBar(Component.text("Menu fermé — clic droit sur l'étoile pour le rouvrir", NamedTextColor.GRAY));
+        }
     }
 
     /** Appelé à la fermeture d'un menu : rend l'étoile et la carte au joueur. */
@@ -1306,12 +1340,9 @@ public final class Game {
     }
 
     private void closeMenus() {
-        for (UUID id : new ArrayList<>(menus.keySet())) {
-            Player p = Bukkit.getPlayer(id);
-            if (p != null) {
-                InventoryHolder holder = p.getOpenInventory().getTopInventory().getHolder();
-                if (holder instanceof LgMenu) p.closeInventory();
-            }
+        for (GamePlayer gp : players.values()) {
+            Player p = gp.player();
+            if (p != null) HoloMenu.close(p);
         }
         menus.clear();
     }
@@ -1321,7 +1352,7 @@ public final class Game {
         later(() -> {
             for (UUID id : menus.keySet()) {
                 Player p = Bukkit.getPlayer(id);
-                if (p != null && p.getOpenInventory().getTopInventory().getHolder() instanceof LgMenu) p.closeInventory();
+                if (p != null) HoloMenu.close(p);
             }
         });
     }

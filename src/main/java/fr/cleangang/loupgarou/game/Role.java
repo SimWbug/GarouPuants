@@ -40,4 +40,12 @@ public enum Role {
     public Team team() { return team; }
     public TextColor color() { return color; }
     public String description() { return description; }
+
+    public String goal() {
+        return switch (this) {
+            case LOUP_GAROU -> "Éliminer les villageois jusqu'à être aussi nombreux qu'eux.";
+            case CUPIDON -> "Aider le village. Les amoureux gagnent s'ils sont les deux derniers.";
+            default -> "Démasquer et éliminer tous les Loups-Garous.";
+        };
+    }
 }

@@ -85,6 +85,15 @@ public final class Items {
         return tag(item, TAG_CARD);
     }
 
+    /** Face de la carte, toujours visible (pour les menus 3D : le modèle en main montre le dos aux autres). */
+    public static ItemStack cardFront(Role role, List<Component> lore) {
+        ItemStack item = button(Material.PAPER, Component.text(role.displayName(), role.color()), lore, false);
+        ItemMeta meta = item.getItemMeta();
+        meta.setItemModel(new NamespacedKey("lgt", "card_front_" + role.id()));
+        item.setItemMeta(meta);
+        return item;
+    }
+
     /** Tête de loup de la barre d'action : rejoindre (ou quitter, si déjà inscrit) la partie. */
     public static ItemStack joinItem(boolean joined) {
         ItemStack item = button(Material.BONE,

@@ -32,6 +32,14 @@ menus de vote avec fond custom, nuits/jours narrés, chat de la meute, morts en 
 
 Permission admin : `loupgarou.admin` (op par défaut).
 
+## Menus 3D
+
+Tous les menus de jeu (vote, loups, voyante, sorcière, cupidon, chasseur, salvateur, fiche de rôle)
+flottent en 3D devant la caméra, visibles uniquement par le joueur concerné.
+Le **viseur sert de curseur** : l'élément visé grossit, s'illumine et affiche ses détails ;
+n'importe quel clic le sélectionne. **S'accroupir** ferme le menu, l'étoile (ou `/lg menu`) le rouvre.
+Seul le menu admin (`/lg admin`) reste un inventaire.
+
 ## Déroulement
 
 - **Distribution** : dos de carte puis retournement animé → ton rôle en grand au centre de l'écran.
@@ -39,7 +47,7 @@ Permission admin : `loupgarou.admin` (op par défaut).
   Seul le rôle appelé est réveillé et reçoit son menu. Les rôles morts sont quand même « appelés »
   pour ne rien révéler (`fake-steps-for-dead-roles`).
 - **Jour** : révélation des morts (carte retournée pour tout le monde), débat, puis vote dans le menu
-  custom — têtes des joueurs, nombre de voix en direct, votants listés, abstention possible.
+  3D — têtes des joueurs, nombre de voix en direct, votants listés, abstention possible.
   Égalité = personne n'est éliminé.
 - **Chasseur** : à sa mort, menu de dernier tir. **Amoureux** : mort de chagrin en chaîne.
 - **Victoire** : Village (plus de loups), Loups (≥ moitié), Amoureux (seuls survivants).

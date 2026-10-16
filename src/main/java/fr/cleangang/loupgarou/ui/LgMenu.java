@@ -1,5 +1,6 @@
 package fr.cleangang.loupgarou.ui;
 
+import net.kyori.adventure.text.Component;
 import org.bukkit.Bukkit;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.InventoryHolder;
@@ -7,16 +8,22 @@ import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Consumer;
 
-/** Menu 6 lignes avec fond custom. Le contenu est reconstruit par {@link #render()} à chaque changement. */
+/**
+ * Contenu d'un menu (cases → objet + action). Le contenu est reconstruit par {@link #render()} à chaque changement.
+ * Il est affiché soit en 3D devant la caméra ({@link HoloMenu}, menus de jeu), soit dans un inventaire (menu admin).
+ */
 public final class LgMenu implements InventoryHolder {
     public static final int[] HEAD_SLOTS;
     public static final int INFO_SLOT = 4;
     public static final int LEFT_BUTTON = 47;
     public static final int MIDDLE_BUTTON = 49;
     public static final int RIGHT_BUTTON = 51;
+    /** Fiche de rôle : la grande carte. */
+    public static final int SHEET_CARD = 0;
 
     static {
         HEAD_SLOTS = new int[21];
@@ -32,12 +39,15 @@ public final class LgMenu implements InventoryHolder {
     private final MenuTheme theme;
     private final Consumer<LgMenu> renderer;
     private final Map<Integer, Runnable> actions = new HashMap<>();
+    private final Map<Integer, ItemStack> items = new LinkedHashMap<>();
+    private Runnable onRender;
+    private boolean lastClickRight;
 
     public LgMenu(MenuTheme theme, Consumer<LgMenu> renderer) {
         this(theme, Glyphs.menuTitle(theme), renderer);
     }
 
-    public LgMenu(MenuTheme theme, net.kyori.adventure.text.Component title, Consumer<LgMenu> renderer) {
+    public LgMenu(MenuTheme theme, Component title, Consumer<LgMenu> renderer) {
         this.theme = theme;
         this.renderer = renderer;
         this.inventory = Bukkit.createInventory(this, 54, title);
@@ -47,15 +57,29 @@ public final class LgMenu implements InventoryHolder {
     public void render() {
         inventory.clear();
         actions.clear();
+        items.clear();
         renderer.accept(this);
+        if (onRender != null) onRender.run();
     }
 
     public void set(int slot, ItemStack item, Runnable action) {
         inventory.setItem(slot, item);
+        if (item != null) items.put(slot, item);
         if (action != null) actions.put(slot, action);
     }
 
-    private boolean lastClickRight;
+    /** Appelé après chaque {@link #render()} (mise à jour de l'affichage 3D). */
+    public void onRender(Runnable hook) {
+        this.onRender = hook;
+    }
+
+    public Map<Integer, ItemStack> items() {
+        return items;
+    }
+
+    public boolean clickable(int slot) {
+        return actions.containsKey(slot);
+    }
 
     public void click(int slot, boolean rightClick) {
         lastClickRight = rightClick;

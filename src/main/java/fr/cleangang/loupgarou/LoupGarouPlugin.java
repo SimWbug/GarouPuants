@@ -26,6 +26,7 @@ public final class LoupGarouPlugin extends JavaPlugin {
     public void onEnable() {
         saveDefaultConfig();
         Items.init(new NamespacedKey(this, "item"));
+        fr.cleangang.loupgarou.ui.HoloMenu.init(this);
         game = new Game(this);
         getServer().getPluginManager().registerEvents(new GameListener(game), this);
         LgCommand command = new LgCommand(this, game);
@@ -42,6 +43,7 @@ public final class LoupGarouPlugin extends JavaPlugin {
     @Override
     public void onDisable() {
         if (game != null) game.forceStop();
+        fr.cleangang.loupgarou.ui.HoloMenu.closeAll();
         // retire les têtes de loup pour ne pas laisser d'objets orphelins
         for (Player p : Bukkit.getOnlinePlayers()) {
             var inv = p.getInventory();

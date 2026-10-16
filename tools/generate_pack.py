@@ -483,6 +483,9 @@ def main():
         icon.save(os.path.join(tex, "item", f"card_{rid}.png"))
         write_json(os.path.join(OUT, "assets", NS, "models", "item", f"card_{rid}.json"),
                    {"parent": "minecraft:item/generated", "textures": {"layer0": f"{NS}:item/card_{rid}"}})
+        # Face toujours visible (menus 3D)
+        write_json(os.path.join(OUT, "assets", NS, "items", f"card_front_{rid}.json"),
+                   {"model": {"type": "minecraft:model", "model": f"{NS}:item/card_{rid}"}})
         # Le porteur voit sa carte, les autres joueurs ne voient que le dos
         write_json(os.path.join(OUT, "assets", NS, "items", f"card_{rid}.json"),
                    {"model": {"type": "minecraft:condition", "property": "minecraft:view_entity",
