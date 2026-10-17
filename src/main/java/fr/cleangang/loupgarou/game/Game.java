@@ -1979,8 +1979,8 @@ public final class Game {
 
     private void renderAdmin(LgMenu m, Player admin) {
         int n = players.size();
-        int preview = Math.max(n, Math.min(arena.maxPlayers(), cfg().getInt("min-players", 5)));
-        if (preview == 0) preview = cfg().getInt("min-players", 5);
+        int previewCount = Math.max(n, Math.min(arena.maxPlayers(), cfg().getInt("min-players", 5)));
+        final int preview = previewCount == 0 ? cfg().getInt("min-players", 5) : previewCount;
         boolean custom = customMode();
         List<Role> roles = buildRoles(preview);
         String error = compositionError(preview);
