@@ -285,7 +285,7 @@ def flat_model(texture):
             "from": [0, 0, 8], "to": [16, 16, 8], "shade": False,
             "faces": {
                 "south": {"uv": [0, 0, 16, 16], "texture": "#0"},
-                "north": {"uv": [16, 0, 0, 16], "texture": "#0"},
+                "north": {"uv": [0, 0, 16, 16], "texture": "#0"},
             },
         }],
     }

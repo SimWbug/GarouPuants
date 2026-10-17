@@ -227,11 +227,10 @@ public final class ArenaManager {
     private static final double BANNER_W = 6.0, BANNER_H = 6.0 * 244 / 1128;
     private static final double[] ROW_Y = {1.36, 0.0, -1.36};
     private final Map<UUID, Integer> selectorPage = new HashMap<>();
-    private static final net.kyori.adventure.key.Key ARCHIVO = net.kyori.adventure.key.Key.key("lgt", "archivo");
 
     /** Texte du menu des arènes en Archivo Black (police du pack). */
     private static Component board(String text) {
-        return Component.text(text, NamedTextColor.WHITE).font(ARCHIVO);
+        return Items.menuText(text, NamedTextColor.WHITE);
     }
 
     public void openSelector(Player p) {

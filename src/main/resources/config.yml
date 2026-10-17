@@ -73,5 +73,9 @@ resource-pack:
   sha1: ""
   required: false
 
+# Police des textes des menus 3D (noms, compteurs, boutons) :
+# "lgt:archivo" = Archivo Black du resource pack, "default" = police Minecraft en gras.
+menu-font: "lgt:archivo"
+
 # Monde du hub (rempli par /lg setlobby) : la tête de loup y est donnée
 lobby-world: ""

@@ -26,6 +26,7 @@ public final class LoupGarouPlugin extends JavaPlugin {
     public void onEnable() {
         saveDefaultConfig();
         Items.init(new NamespacedKey(this, "item"));
+        Items.menuFont(getConfig().getString("menu-font", "lgt:archivo"));
         fr.cleangang.loupgarou.ui.HoloMenu.init(this);
         arenas = new ArenaManager(this);
         arenas.load();

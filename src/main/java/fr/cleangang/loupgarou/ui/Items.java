@@ -25,6 +25,26 @@ public final class Items {
     public static final String TAG_JOIN = "join";
     public static final String TAG_MAYOR = "mayor";
     private static NamespacedKey tagKey;
+    /** Police des textes des menus 3D (config « menu-font ») ; null = police Minecraft en gras. */
+    private static net.kyori.adventure.key.Key menuFont = net.kyori.adventure.key.Key.key("lgt", "archivo");
+
+    public static void menuFont(String id) {
+        if (id == null || id.isBlank() || id.equalsIgnoreCase("default") || id.equalsIgnoreCase("minecraft:default")) {
+            menuFont = null;
+            return;
+        }
+        try {
+            menuFont = net.kyori.adventure.key.Key.key(id.contains(":") ? id : "lgt:" + id);
+        } catch (RuntimeException e) {
+            menuFont = null;
+        }
+    }
+
+    /** Texte des menus 3D dans la police choisie (Archivo Black par défaut). */
+    public static Component menuText(String text, TextColor color) {
+        Component c = Component.text(text, color);
+        return menuFont == null ? c.decorate(TextDecoration.BOLD) : c.font(menuFont);
+    }
 
     private Items() {}
 

@@ -142,6 +142,7 @@ public final class LgCommand implements TabExecutor {
             }
             case "reload" -> {
                 plugin.reloadConfig();
+                fr.cleangang.loupgarou.ui.Items.menuFont(plugin.getConfig().getString("menu-font", "lgt:archivo"));
                 arenas.refreshAllJoinItems();
                 sender.sendMessage(Component.text("config.yml rechargé (les arènes sont enregistrées automatiquement).",
                         NamedTextColor.GREEN));

@@ -51,7 +51,7 @@ final class BoardLayout {
     }
 
     static Component font(String text, TextColor color) {
-        return Component.text(text, color).font(ARCHIVO);
+        return Items.menuText(text, color);
     }
 
     static ItemStack flat(String model) {

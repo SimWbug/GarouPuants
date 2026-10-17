@@ -461,7 +461,7 @@ public final class HoloMenu {
         if (td == null || !td.isValid()) return;
         String h = hovered == null ? null : menu.hint(hovered.slot);
         td.text(h == null ? BoardLayout.defaultHint()
-                : Component.text("▶ " + h, NamedTextColor.YELLOW).font(BoardLayout.ARCHIVO));
+                : Items.menuText("▶ " + h, NamedTextColor.YELLOW));
     }
 
     /** Sablier : la jauge se vide en continu (interpolation sur 1 s), rouge dans les 10 dernières secondes. */
@@ -575,7 +575,9 @@ public final class HoloMenu {
                 .add(forward.clone().multiply(depth))
                 .add(right.clone().multiply(x))
                 .add(0, y, 0);
-        l.setYaw(0);
+        // tout le menu est un panneau plat, fixe, tourné vers le joueur (même rendu que l'ancien « billboard »
+        // quand on regarde droit devant, mais il ne se déforme plus quand on tourne la tête)
+        l.setYaw(eye.getYaw() + 180f);
         l.setPitch(0);
         return l;
     }
@@ -583,7 +585,7 @@ public final class HoloMenu {
     private <T extends Display> T prepare(T e) {
         e.setPersistent(false);
         e.setVisibleByDefault(false);
-        e.setBillboard(Display.Billboard.CENTER);
+        e.setBillboard(Display.Billboard.FIXED);
         e.setBrightness(new Display.Brightness(15, 15));
         e.setViewRange(0.5f);
         e.setTeleportDuration(2);
