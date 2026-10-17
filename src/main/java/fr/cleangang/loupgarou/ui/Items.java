@@ -23,6 +23,7 @@ public final class Items {
     public static final String TAG_MENU = "menu";
     public static final String TAG_CARD = "card";
     public static final String TAG_JOIN = "join";
+    public static final String TAG_MAYOR = "mayor";
     private static NamespacedKey tagKey;
 
     private Items() {}
@@ -94,16 +95,35 @@ public final class Items {
         return item;
     }
 
-    /** Tête de loup de la barre d'action : rejoindre (ou quitter, si déjà inscrit) la partie. */
-    public static ItemStack joinItem(boolean joined) {
+    /** Tête de loup de la barre d'action : ouvre le menu de choix des arènes. */
+    public static ItemStack joinItem(String queuedArena) {
+        boolean joined = queuedArena != null;
         ItemStack item = button(Material.BONE,
-                joined ? plain("Quitter le village", NamedTextColor.RED) : plain("Rejoindre le Loup-Garou", NamedTextColor.GOLD),
-                joined ? lore("Clic droit pour quitter la file d'attente.")
-                        : lore("Clic droit pour rejoindre la partie.", "Le village t'attend... les loups aussi."), !joined);
+                joined ? plain("Loup-Garou — " + queuedArena, NamedTextColor.GOLD) : plain("Jouer au Loup-Garou", NamedTextColor.GOLD),
+                joined ? lore("Tu attends dans cette arène.", "Clic droit : changer d'arène ou quitter.")
+                        : lore("Clic droit pour choisir une arène.", "Le village t'attend... les loups aussi."), !joined);
         ItemMeta meta = item.getItemMeta();
         meta.setItemModel(new NamespacedKey("lgt", joined ? "wolf_head_leave" : "wolf_head"));
         item.setItemMeta(meta);
         return tag(item, TAG_JOIN);
+    }
+
+    /** Outil de l'éditeur d'arène (le tag commence par « edit_ »). */
+    public static ItemStack editTool(String tag, Material material, String name, String... loreLines) {
+        ItemStack item = button(material, plain(name, NamedTextColor.AQUA), lore(loreLines), true);
+        return tag(item, tag);
+    }
+
+    /** Insigne du Maire : ouvre ses pouvoirs (lancer / clore le vote, prolonger le débat). */
+    public static ItemStack mayorItem() {
+        ItemStack item = button(Material.BELL, plain("♛ Pouvoirs du Maire", NamedTextColor.GOLD),
+                lore("Clic droit : lancer le vote, prolonger", "le débat ou clore le vote."), true);
+        return tag(item, TAG_MAYOR);
+    }
+
+    public static ItemStack mayorHat() {
+        return button(Material.GOLDEN_HELMET, plain("♛ Couronne du Maire", NamedTextColor.GOLD),
+                lore("Sa voix compte double."), true);
     }
 
     /** Carte de rôle pour le menu admin : quantité = nombre de cartes, dos de carte si 0. */

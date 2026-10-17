@@ -1,30 +1,46 @@
 # ==========================================================
 #  LoupGarouMC — configuration
+#  Les arènes (spawns, point d'attente, composition) sont dans arenas.yml
+#  et se règlent en jeu : /lg arena create <nom> puis /lg arena edit <nom>
 # ==========================================================
 
+# Joueurs minimum pour lancer une partie (le maximum = nombre de spawns de l'arène, 16 max)
 min-players: 5
-max-players: 21
 
-# Tête de loup dans la barre d'action : clic droit pour rejoindre / quitter
+# Lancement automatique dès que l'arène a assez de joueurs (compte à rebours timers.lobby,
+# réduit à 10 s quand l'arène est pleine). false = seul un admin lance avec /lg start.
+auto-start: true
+
+# Tête de loup dans la barre d'action : clic droit pour choisir une arène
 join-item:
   enabled: true
   slot: 3            # 0 à 8 (3 = 4e case de la barre)
-  # Mondes où la tête est donnée (/lg slot monde ajoute le tien). Vide = monde du lobby, ou partout si aucun lobby.
+  # Mondes où la tête est donnée (/lg slot monde ajoute le tien). Vide = monde du hub (/lg setlobby),
+  # sinon le monde principal du serveur.
   worlds: []
+  # Rayon (en blocs) autour du point /lg setlobby où la tête est donnée. 0 = tout le monde.
+  # Utile si tes autres mini-jeux sont dans le même monde que le hub. (/lg slot zone <rayon>)
+  radius: 0
 
-# Les joueurs restent assis autour de la table pendant toute la partie
+# Les joueurs restent sur leur spawn pendant toute la partie
 freeze-players: true
 
 # Quand un rôle est mort, le narrateur l'appelle quand même (durée aléatoire)
 # pour ne pas révéler qui est encore en vie.
 fake-steps-for-dead-roles: true
 
-# Rayon minimum du cercle autour de la table (s'agrandit avec le nombre de joueurs)
-table-radius: 4.0
+# Maire : élu le premier jour, voix double, départage les égalités,
+# peut lancer le vote plus tôt, prolonger le débat ou clore le vote.
+mayor:
+  enabled: true
+  double-vote: true
+  extend-seconds: 30
+  max-extends: 2
 
 # Durées en secondes
 timers:
-  countdown: 10
+  lobby: 30          # compte à rebours du lancement automatique
+  countdown: 10      # compte à rebours quand un admin lance
   distribution: 12
   cupid: 30
   lovers: 10
@@ -32,24 +48,15 @@ timers:
   guard: 25
   wolves: 45
   witch: 30
-  discussion: 120
-  vote: 45
+  mayor: 40          # élection du Maire
+  discussion: 120    # le Maire peut couper avant
+  vote: 45           # le Maire peut clore avant
   hunter: 20
+  succession: 20     # le Maire mourant désigne son successeur
+  summary: 30        # durée du résumé 3D de fin de partie
 
-# Composition (réglable en jeu avec /lg admin)
+# Composition automatique (quand une arène est en mode « auto » dans /lg admin)
 roles:
-  # auto = calculée selon le nombre de joueurs ; custom = nombres ci-dessous
-  mode: auto
-  # Mode custom : nombre de cartes par rôle. Les places restantes deviennent des Villageois.
-  custom:
-    loup_garou: 2
-    villageois: 0
-    voyante: 1
-    sorciere: 1
-    chasseur: 1
-    cupidon: 0
-    salvateur: 0
-  # --- Mode auto ---
   # 1 loup-garou pour X joueurs (minimum 1)
   players-per-wolf: 4
   # Nombre minimum de joueurs pour ajouter le rôle (0 = désactivé)
@@ -66,7 +73,5 @@ resource-pack:
   sha1: ""
   required: false
 
-# Positions (remplies via /lg setcenter et /lg setlobby)
-table: null
-lobby: null
+# Monde du hub (rempli par /lg setlobby) : la tête de loup y est donnée
 lobby-world: ""

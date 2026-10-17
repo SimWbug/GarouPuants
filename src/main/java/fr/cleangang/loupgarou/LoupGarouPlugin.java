@@ -1,6 +1,6 @@
 package fr.cleangang.loupgarou;
 
-import fr.cleangang.loupgarou.game.Game;
+import fr.cleangang.loupgarou.game.ArenaManager;
 import fr.cleangang.loupgarou.game.GameListener;
 import fr.cleangang.loupgarou.ui.Items;
 import net.kyori.adventure.resource.ResourcePackInfo;
@@ -19,7 +19,7 @@ import java.util.UUID;
 public final class LoupGarouPlugin extends JavaPlugin {
     private static final UUID PACK_ID = UUID.nameUUIDFromBytes("loupgaroumc-pack".getBytes());
 
-    private Game game;
+    private ArenaManager arenas;
     private ResourcePackInfo cachedPack;
 
     @Override
@@ -27,22 +27,23 @@ public final class LoupGarouPlugin extends JavaPlugin {
         saveDefaultConfig();
         Items.init(new NamespacedKey(this, "item"));
         fr.cleangang.loupgarou.ui.HoloMenu.init(this);
-        game = new Game(this);
-        getServer().getPluginManager().registerEvents(new GameListener(game), this);
-        LgCommand command = new LgCommand(this, game);
+        arenas = new ArenaManager(this);
+        arenas.load();
+        getServer().getPluginManager().registerEvents(new GameListener(arenas), this);
+        LgCommand command = new LgCommand(this, arenas);
         PluginCommand lg = getCommand("lg");
         if (lg != null) {
             lg.setExecutor(command);
             lg.setTabCompleter(command);
         }
-        game.refreshAllJoinItems();
-        game.startJoinItemWatcher();
-        getLogger().info("Loup-Garou prêt. /lg join pour rejoindre le village.");
+        arenas.refreshAllJoinItems();
+        arenas.startWatchers();
+        getLogger().info("Loup-Garou prêt : " + arenas.arenas().size() + " arène(s). /lg arena create <nom> pour en créer une.");
     }
 
     @Override
     public void onDisable() {
-        if (game != null) game.forceStop();
+        if (arenas != null) arenas.forceStopAll();
         fr.cleangang.loupgarou.ui.HoloMenu.closeAll();
         // retire les têtes de loup pour ne pas laisser d'objets orphelins
         for (Player p : Bukkit.getOnlinePlayers()) {

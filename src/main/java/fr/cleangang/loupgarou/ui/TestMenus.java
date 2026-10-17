@@ -24,7 +24,8 @@ import java.util.UUID;
  */
 public final class TestMenus {
     public static final List<String> MENUS = List.of(
-            "vote", "loups", "voyante", "sorciere", "cupidon", "chasseur", "salvateur", "fiche", "carte", "admin", "fermer");
+            "vote", "maire", "pouvoirs", "loups", "voyante", "sorciere", "cupidon", "chasseur", "salvateur", "fiche", "carte",
+            "arenes", "admin", "fermer");
     private static final String[] FAKE = {"Lucas", "Emma", "Hugo", "Jade", "Nathan", "Lea", "Tom", "Ines", "Chloe", "Louis"};
 
     private final Plugin plugin;
@@ -52,15 +53,18 @@ public final class TestMenus {
         Role role = parseRole(roleArg);
         List<Target> targets = targets(p, Math.max(1, Math.min(21, count)));
         HoloMenu.ClickHandler direct = (m, slot, right) -> m.click(slot, right);
+        viewerId = p.getUniqueId();
         switch (menu.toLowerCase(Locale.ROOT)) {
-            case "vote" -> HoloMenu.open(p, voteMenu(MenuTheme.VOTE, targets, "Qui est le loup ?", "Clique pour voter contre"), direct);
-            case "loups" -> HoloMenu.open(p, voteMenu(MenuTheme.WOLVES, targets, "Choisissez une victime", "Clique pour voter"), direct);
-            case "voyante" -> HoloMenu.open(p, seer(p, targets), direct);
-            case "sorciere" -> HoloMenu.open(p, witch(targets), direct);
-            case "cupidon" -> HoloMenu.open(p, cupid(p, targets), direct);
-            case "chasseur" -> HoloMenu.open(p, single(p, MenuTheme.HUNTER, targets, Material.CROSSBOW, "Dernière balle",
+            case "vote" -> show(p, voteMenu(MenuTheme.VOTE, targets, "Qui est le loup ?", "Clique pour voter contre"), direct);
+            case "maire" -> show(p, voteMenu(MenuTheme.MAYOR_VOTE, targets, "Qui sera le Maire ?", "Clique pour élire"), direct);
+            case "pouvoirs" -> show(p, mayorPanel(p), direct);
+            case "loups" -> show(p, voteMenu(MenuTheme.WOLVES, targets, "Choisissez une victime", "Clique pour dévorer"), direct);
+            case "voyante" -> show(p, seer(p, targets), direct);
+            case "sorciere" -> show(p, witch(targets), direct);
+            case "cupidon" -> show(p, cupid(p, targets), direct);
+            case "chasseur" -> show(p, single(p, MenuTheme.HUNTER, targets, Material.CROSSBOW, "Dernière balle",
                     "Clique sur le joueur à abattre.", "Clique pour tirer", "abat"), direct);
-            case "salvateur" -> HoloMenu.open(p, single(p, MenuTheme.GUARD, targets, Material.SHIELD, "Protection",
+            case "salvateur" -> show(p, single(p, MenuTheme.GUARD, targets, Material.SHIELD, "Protection",
                     "Clique sur le joueur à protéger.", "Clique pour le protéger", "protège"), direct);
             case "fiche" -> HoloMenu.open(p, sheet(p, role), direct);
             case "carte" -> CardAnimator.reveal(plugin, p, role, Component.text(role.displayName(), role.color()));
@@ -70,6 +74,20 @@ public final class TestMenus {
             }
         }
         return null;
+    }
+
+    private UUID viewerId;
+
+    /** Ouvre un menu de test avec un sablier factice de 45 s (en boucle). */
+    private void show(Player p, LgMenu menu, HoloMenu.ClickHandler handler) {
+        long start = System.currentTimeMillis();
+        menu.timer(() -> 45 - (int) ((System.currentTimeMillis() - start) / 1000 % 45), () -> 45);
+        menu.render();
+        HoloMenu.open(p, menu, handler);
+    }
+
+    private UUID idOf(String name) {
+        return "Toi".equals(name) ? viewerId : UUID.nameUUIDFromBytes(("lgtest-" + name).getBytes());
     }
 
     private Role parseRole(String arg) {
@@ -104,6 +122,10 @@ public final class TestMenus {
                 lore.add(Items.plain(voters.size() + " voix", NamedTextColor.GOLD));
                 for (String v : voters) lore.add(Items.plain(" • " + v, NamedTextColor.GRAY));
                 lore.add(Items.plain(me ? "▶ Ton vote" : hint, NamedTextColor.DARK_GRAY));
+                List<Map.Entry<UUID, String>> who = new ArrayList<>();
+                for (String v : voters) who.add(Map.entry(idOf(v), v));
+                m.entry(LgMenu.HEAD_SLOTS[i], new LgMenu.Entry(null, voters.size(), (targets.size() + 2) / 2, who, me,
+                        hint + " " + t.name()));
                 m.set(LgMenu.HEAD_SLOTS[i], Items.head(t.id(), t.name(), lore, 1, me), () -> {
                     if (mine[0] != null) votes.getOrDefault(mine[0], new HashSet<>()).remove("Toi");
                     mine[0] = t.id();
@@ -120,6 +142,27 @@ public final class TestMenus {
                     m.render();
                 });
             }
+        });
+    }
+
+    private LgMenu mayorPanel(Player p) {
+        int[] extends_ = {0};
+        return new LgMenu(MenuTheme.MAYOR, Component.text("Maire"), m -> {
+            m.set(LgMenu.INFO_SLOT, Items.button(Material.GOLDEN_HELMET, Items.plain("Tu diriges le village", NamedTextColor.GOLD),
+                    List.of(Items.plain("Phase : débat", NamedTextColor.YELLOW),
+                            Items.plain("Ta voix compte double au vote.", NamedTextColor.GRAY)), false), null);
+            m.set(LgMenu.LEFT_BUTTON, Items.button(Material.BELL, Items.plain("Lancer le vote maintenant", NamedTextColor.GOLD),
+                    Items.lore("Coupe le débat et ouvre le vote."), false),
+                    () -> p.sendActionBar(Component.text("(test) Le Maire lance le vote !", NamedTextColor.GOLD)));
+            boolean can = extends_[0] < 2;
+            m.set(LgMenu.RIGHT_BUTTON, Items.button(can ? Material.CLOCK : Material.GRAY_DYE,
+                    Items.plain("+30 s de débat", can ? NamedTextColor.AQUA : NamedTextColor.DARK_GRAY),
+                    Items.lore(can ? "Encore " + (2 - extends_[0]) + " fois possible." : "Plus de prolongation possible."), false), () -> {
+                if (extends_[0] < 2) extends_[0]++;
+                m.render();
+            });
+            m.set(LgMenu.MIDDLE_BUTTON, Items.button(Material.BARRIER, Items.plain("Fermer", NamedTextColor.RED), null, false),
+                    () -> Bukkit.getScheduler().runTask(plugin, () -> HoloMenu.close(p)));
         });
     }
 

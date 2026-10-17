@@ -9,6 +9,7 @@ OUT = os.path.join(ROOT, "resourcepack")
 NS = "lgt"
 FONT_BOLD = "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"
 FONT_SANS = "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+FONT_ARCHIVO = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "ArchivoBlack-Regular.ttf")
 
 # Doit rester dans le même ordre que l'enum Role.java
 ROLES = [
@@ -30,7 +31,21 @@ THEMES = [
     ("hunter", "DERNIER TIR DU CHASSEUR", (214, 110, 30)),
     ("guard", "PROTECTION DU SALVATEUR", (52, 140, 210)),
     ("admin", "COMPOSITION DE LA PARTIE", (210, 170, 80)),
+    ("arenas", "CHOIX DE L'ARÈNE", (201, 151, 62)),
 ]
+
+# Boutons des menus de jeu (vert = valider, rouge = action dangereuse, gris = passer...)
+BUTTON_COLORS = {
+    "green": (80, 205, 20), "red": (235, 20, 20), "gray": (150, 150, 160), "orange": (255, 135, 20),
+    "gold": (235, 175, 10), "blue": (40, 130, 235), "purple": (150, 80, 215), "pink": (240, 90, 160),
+}
+# Bandeau de titre de chaque menu 3D (même nom que MenuTheme en minuscules)
+TITLE_COLORS = {
+    "vote": (224, 150, 40), "wolves": (205, 40, 30), "seer": (150, 80, 205), "witch": (40, 170, 90),
+    "cupid": (235, 90, 155), "hunter": (230, 120, 30), "guard": (25, 60, 140), "admin": (210, 160, 60),
+    "arenas": (224, 150, 40), "sheet": (200, 150, 50), "mayor_vote": (230, 170, 10), "mayor": (230, 170, 10),
+    "succession": (230, 170, 10), "summary": (200, 150, 50),
+}
 
 S = 2                      # sur-échantillonnage pour l'anti-aliasing
 CW, CH = 128, 192          # taille finale d'une carte
@@ -188,29 +203,204 @@ def squash(img, ratio):
     return canvas
 
 
+# ---------------------------------------------------------------- cadre bleu (fond de tous les menus)
+FRAME_SRC = os.path.join(ROOT, "tools", "assets", "menu_frame.png")
+FRAME_BORDER = 8          # marge du 9-slice en pixels « natifs »
+SLOT_FILL = (14, 52, 122)
+INSET_FILL = (17, 70, 158)
+
+
+def frame_native():
+    """Le cadre fourni est en pixel art agrandi ×4 : on revient aux pixels d'origine."""
+    src = Image.open(FRAME_SRC).convert("RGBA")
+    px = 4
+    return src.resize((src.width // px, src.height // px), Image.NEAREST)
+
+
+_FRAME = None
+
+
+def nine_slice(w, h, scale=1):
+    """Cadre redimensionné à n'importe quelle taille sans déformer les bords (coins intacts)."""
+    global _FRAME
+    if _FRAME is None:
+        _FRAME = frame_native()
+    f = _FRAME
+    m = FRAME_BORDER
+    W, H = w // scale, h // scale
+    out = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    fw, fh = f.size
+    def part(x0, y0, x1, y1):
+        return f.crop((x0, y0, x1, y1))
+    # coins
+    out.paste(part(0, 0, m, m), (0, 0))
+    out.paste(part(fw - m, 0, fw, m), (W - m, 0))
+    out.paste(part(0, fh - m, m, fh), (0, H - m))
+    out.paste(part(fw - m, fh - m, fw, fh), (W - m, H - m))
+    # bords étirés
+    out.paste(part(m, 0, fw - m, m).resize((W - 2 * m, m), Image.NEAREST), (m, 0))
+    out.paste(part(m, fh - m, fw - m, fh).resize((W - 2 * m, m), Image.NEAREST), (m, H - m))
+    out.paste(part(0, m, m, fh - m).resize((m, H - 2 * m), Image.NEAREST), (0, m))
+    out.paste(part(fw - m, m, fw, fh - m).resize((m, H - 2 * m), Image.NEAREST), (W - m, m))
+    # centre
+    out.paste(part(m, m, fw - m, fh - m).resize((W - 2 * m, H - 2 * m), Image.NEAREST), (m, m))
+    if scale > 1:
+        out = out.resize((W * scale, H * scale), Image.NEAREST)
+    return out
+
+
+def frame_gui(W, H, title, accent=(255, 230, 150)):
+    """Fond d'inventaire : cadre bleu + titre."""
+    img = nine_slice(W, H)
+    d = ImageDraw.Draw(img)
+    f = fit_font(d, title, FONT_SANS, 9, W - 20)
+    tw = d.textlength(title, font=f)
+    d.text((W / 2 - tw / 2 + 1, 5), title, font=f, fill=(8, 30, 70))
+    d.text((W / 2 - tw / 2, 4), title, font=f, fill=(255, 255, 255))
+    d.line((10, 16, W - 11, 16), fill=(90, 165, 245))
+    d.line((10, 17, W - 11, 17), fill=(12, 50, 110))
+    return img, d
+
+
+def inset(d, box):
+    x0, y0, x1, y1 = box
+    d.rectangle(box, fill=INSET_FILL)
+    d.line((x0, y0, x1, y0), fill=(10, 42, 100)); d.line((x0, y0, x0, y1), fill=(10, 42, 100))
+    d.line((x0, y1, x1, y1), fill=(80, 150, 235)); d.line((x1, y0, x1, y1), fill=(80, 150, 235))
+
+
 def slot(d, x, y, accent=None):
-    d.rectangle((x, y, x + 17, y + 17), fill=(139, 139, 139))
-    d.line((x, y, x + 16, y), fill=(55, 55, 55)); d.line((x, y, x, y + 16), fill=(55, 55, 55))
-    d.line((x + 1, y + 17, x + 17, y + 17), fill=(255, 255, 255)); d.line((x + 17, y + 1, x + 17, y + 17), fill=(255, 255, 255))
+    d.rectangle((x, y, x + 17, y + 17), fill=SLOT_FILL)
+    d.line((x, y, x + 16, y), fill=(6, 26, 66)); d.line((x, y, x, y + 16), fill=(6, 26, 66))
+    d.line((x + 1, y + 17, x + 17, y + 17), fill=(110, 180, 255)); d.line((x + 17, y + 1, x + 17, y + 17), fill=(110, 180, 255))
     if accent:
         d.rectangle((x - 1, y - 1, x + 18, y + 18), outline=accent)
+
+
+def flat_model(texture):
+    """Image plate sans épaisseur (affichée telle quelle, transparence gardée, recto et verso)."""
+    return {
+        "textures": {"0": texture, "particle": texture},
+        "elements": [{
+            "from": [0, 0, 8], "to": [16, 16, 8], "shade": False,
+            "faces": {
+                "south": {"uv": [0, 0, 16, 16], "texture": "#0"},
+                "north": {"uv": [16, 0, 0, 16], "texture": "#0"},
+            },
+        }],
+    }
+
+
+def make_button(base, label, top, bottom):
+    """Bouton dans le style de « JOUER » : même cadre blanc, autre couleur et autre texte."""
+    img = base.copy()
+    w, h = img.size
+    px = img.load()
+    # intérieur (dans le cadre blanc de 5 px) repeint en dégradé, l'ancien texte disparaît
+    m = 5
+    for y in range(m, h - m):
+        t = (y - m) / max(1, h - 2 * m - 1)
+        col = tuple(int(top[i] + (bottom[i] - top[i]) * t) for i in range(3))
+        for x in range(m, w - m):
+            if px[x, y][3] > 0:
+                px[x, y] = col + (255,)
+    d = ImageDraw.Draw(img)
+    f = fit_font(d, label, FONT_ARCHIVO, int(h * 0.46), int(w * 0.8))
+    tw = d.textlength(label, font=f)
+    bbox = d.textbbox((0, 0), label, font=f)
+    th = bbox[3] - bbox[1]
+    x, y = (w - tw) / 2, (h - th) / 2 - bbox[1]
+    d.text((x, y), label, font=f, fill=(255, 255, 255), stroke_width=3, stroke_fill=(40, 40, 40))
+    return img
+
+
+def label_button(base, label, tint=None):
+    """Bouton vide fourni (cadre blanc + intérieur rouge ombré) : recoloré si besoin, puis texte centré."""
+    img = base.copy()
+    w, h = img.size
+    px = img.load()
+    if tint:
+        for y in range(h):
+            for x in range(w):
+                r, g, b, a = px[x, y]
+                if a and not (r > 200 and g > 200 and b > 200):  # garde le cadre blanc, garde l'ombrage
+                    k = r / 255
+                    px[x, y] = tuple(int(c * k) for c in tint) + (a,)
+    d = ImageDraw.Draw(img)
+    f = fit_font(d, label, FONT_ARCHIVO, int(h * 0.46), int(w * 0.8))
+    tw = d.textlength(label, font=f)
+    bbox = d.textbbox((0, 0), label, font=f)
+    th = bbox[3] - bbox[1]
+    tx, ty = (w - tw) / 2, (h - th) / 2 - bbox[1]
+    shadow = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    ImageDraw.Draw(shadow).text((tx + 2, ty + 2), label, font=f, fill=(0, 0, 0, 110))
+    img.alpha_composite(shadow)
+    d = ImageDraw.Draw(img)
+    d.text((tx, ty), label, font=f, fill=(255, 255, 255))
+    return img
+
+
+def btn_slice(base, w, h, m=8):
+    """Bouton vide redimensionné en 9-slice (cadre blanc intact à toute largeur)."""
+    fw, fh = base.size
+    out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    def part(x0, y0, x1, y1):
+        return base.crop((x0, y0, x1, y1))
+    out.paste(part(0, 0, m, m), (0, 0))
+    out.paste(part(fw - m, 0, fw, m), (w - m, 0))
+    out.paste(part(0, fh - m, m, fh), (0, h - m))
+    out.paste(part(fw - m, fh - m, fw, fh), (w - m, h - m))
+    out.paste(part(m, 0, fw - m, m).resize((w - 2 * m, m), Image.NEAREST), (m, 0))
+    out.paste(part(m, fh - m, fw - m, fh).resize((w - 2 * m, m), Image.NEAREST), (m, h - m))
+    out.paste(part(0, m, m, fh - m).resize((m, h - 2 * m), Image.NEAREST), (0, m))
+    out.paste(part(fw - m, m, fw, fh - m).resize((m, h - 2 * m), Image.NEAREST), (w - m, m))
+    out.paste(part(m, m, fw - m, fh - m).resize((w - 2 * m, h - 2 * m), Image.NEAREST), (m, m))
+    return out
+
+
+def tint(img, color, alpha=None):
+    """Recolore l'intérieur rouge du bouton vide en gardant l'ombrage et le cadre blanc."""
+    img = img.copy()
+    px = img.load()
+    for y in range(img.height):
+        for x in range(img.width):
+            r, g, b, a = px[x, y]
+            if a and not (r > 200 and g > 200 and b > 200):
+                k = r / 255
+                px[x, y] = tuple(int(c * k) for c in color) + (a if alpha is None else min(a, alpha),)
+    return img
+
+
+def bar(w, h, top, bottom, border=(255, 255, 255, 255)):
+    """Jauge : dégradé vertical, liseré d'1 px."""
+    img = Image.new("RGBA", (w, h))
+    px = img.load()
+    for y in range(h):
+        t = y / max(1, h - 1)
+        col = tuple(int(top[i] + (bottom[i] - top[i]) * t) for i in range(3)) + (255,)
+        for x in range(w):
+            px[x, y] = col
+    if border:
+        d = ImageDraw.Draw(img)
+        d.rectangle((0, 0, w - 1, h - 1), outline=border)
+    return img
+
+
+def make_panel(ratio, height=192):
+    """Panneau des menus 3D pour un rapport largeur/hauteur donné (bords nets à toute taille)."""
+    h = height
+    w = max(64, int(round(h * ratio)))
+    return nine_slice(w, h)
 
 
 def make_gui(title, color):
     W, H = 176, 222
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    dark = mix(color, (20, 16, 24), 0.78)
-    mid = mix(color, (40, 34, 44), 0.55)
-    d.rounded_rectangle((0, 0, W - 1, H - 1), radius=5, fill=dark + (255,), outline=(10, 8, 12))
-    d.rounded_rectangle((1, 1, W - 2, H - 2), radius=4, outline=mix(color, (255, 255, 255), 0.35))
-    # bandeau de titre
-    d.rectangle((4, 3, W - 5, 14), fill=mid)
-    d.line((4, 15, W - 5, 15), fill=color)
-    f = fit_font(d, title, FONT_SANS, 9, W - 16)
-    centered_text(d, W / 2, 3, title, f, (255, 240, 210))
+    dark = (20, 74, 160)
+    img, d = frame_gui(W, H, title)
     # zone joueurs (lignes 1-3, colonnes 1-7)
-    d.rounded_rectangle((22, 34, W - 23, 92), radius=3, fill=mix(color, (12, 10, 14), 0.86))
+    inset(d, (22, 33, W - 23, 92))
     for r in range(1, 4):
         for c in range(1, 8):
             slot(d, 7 + c * 18, 17 + r * 18)
@@ -306,8 +496,8 @@ def make_role_sheet(ri, rid, title, team, color):
     d = ImageDraw.Draw(img)
     dark = mix(color, (16, 14, 22), 0.82)
     gold = (240, 214, 150)
-    d.rounded_rectangle((0, 0, W - 1, H - 1), radius=6 * K, fill=dark + (255,), outline=(10, 8, 12), width=K)
-    d.rounded_rectangle((K, K, W - 1 - K, H - 1 - K), radius=5 * K, outline=mix(color, (255, 255, 255), 0.35), width=K)
+    img.alpha_composite(nine_slice(W, H, K))
+    d = ImageDraw.Draw(img)
     # bandeau
     d.rectangle((4 * K, 3 * K, W - 5 * K, 15 * K), fill=mix(color, (40, 34, 44), 0.55))
     d.line((4 * K, 16 * K, W - 5 * K, 16 * K), fill=color, width=K)
@@ -403,29 +593,51 @@ def make_wolf_head(leave):
     return img
 
 
+def make_arena_gui(title, color):
+    """Choix de l'arène : 3 lignes de 7 arènes, boutons en bas, inventaire du joueur visible."""
+    W, H = 176, 222
+    img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    img, d = frame_gui(W, H, title)
+    slot(d, 7 + 4 * 18, 17, accent=(255, 230, 150))
+    inset(d, (22, 34, W - 23, 92))
+    for r in range(1, 4):
+        for c in range(1, 8):
+            slot(d, 7 + c * 18, 17 + r * 18)
+    # petites lanternes décoratives
+    for x in (10, W - 16):
+        d.rectangle((x, 50, x + 5, 58), fill=(250, 200, 90))
+        d.rectangle((x - 1, 48, x + 6, 49), fill=(60, 50, 40))
+        d.rectangle((x - 1, 59, x + 6, 60), fill=(60, 50, 40))
+    for c, col in ((2, (220, 70, 70)), (4, (220, 70, 70)), (6, (110, 190, 230))):
+        slot(d, 7 + c * 18, 107, accent=col)
+    d.line((7, 133, W - 8, 133), fill=(90, 165, 245))
+    for r in range(3):
+        for c in range(9):
+            slot(d, 7 + c * 18, 139 + r * 18)
+    for c in range(9):
+        slot(d, 7 + c * 18, 197)
+    return img
+
+
 def make_admin_gui(title, color):
     """Menu admin : 7 cartes de rôle (ligne 1), mode/raz (ligne 3), boutons (ligne 5), inventaire normal."""
     W, H = 176, 222
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    dark = mix(color, (20, 16, 24), 0.8)
-    d.rounded_rectangle((0, 0, W - 1, H - 1), radius=5, fill=dark + (255,), outline=(10, 8, 12))
-    d.rounded_rectangle((1, 1, W - 2, H - 2), radius=4, outline=mix(color, (255, 255, 255), 0.35))
-    d.rectangle((4, 3, W - 5, 14), fill=mix(color, (40, 34, 44), 0.55))
-    d.line((4, 15, W - 5, 15), fill=color)
-    centered_text(d, W / 2, 3, title, fit_font(d, title, FONT_SANS, 9, W - 16), (255, 240, 210))
-    slot(d, 7 + 4 * 18, 17, accent=(240, 214, 150))
-    d.rounded_rectangle((22, 34, W - 23, 54), radius=3, fill=mix(color, (12, 10, 14), 0.86))
+    img, d = frame_gui(W, H, title)
+    slot(d, 7 + 4 * 18, 17, accent=(255, 230, 150))
+    inset(d, (22, 34, W - 23, 54))
     for c in range(1, 8):
-        slot(d, 7 + c * 18, 35, accent=color)
+        slot(d, 7 + c * 18, 35, accent=(255, 230, 150))
     f = font(FONT_SANS, 7)
-    centered_text(d, W / 2, 57, "Clic gauche +1   ·   Clic droit -1", f, (240, 225, 190))
-    centered_text(d, W / 2, 65, "Places restantes = Villageois", f, mix(color, (255, 255, 255), 0.3))
-    slot(d, 7 + 3 * 18, 89, accent=color)
-    slot(d, 7 + 5 * 18, 89, accent=color)
+    centered_text(d, W / 2, 57, "Clic gauche +1   ·   Clic droit -1", f, (255, 255, 255))
+    centered_text(d, W / 2, 65, "Places restantes = Villageois", f, (170, 210, 255))
+    slot(d, 7 + 3 * 18, 89, accent=(255, 230, 150))
+    slot(d, 7 + 5 * 18, 89, accent=(255, 230, 150))
     for c, col in ((2, (90, 200, 110)), (4, (220, 70, 70)), (6, (220, 70, 70))):
         slot(d, 7 + c * 18, 107, accent=col)
-    d.line((7, 133, W - 8, 133), fill=mix(color, (255, 255, 255), 0.2))
+    d.line((7, 133, W - 8, 133), fill=(90, 165, 245))
     for r in range(3):
         for c in range(9):
             slot(d, 7 + c * 18, 139 + r * 18)
@@ -500,6 +712,51 @@ def main():
                {"parent": "minecraft:item/generated", "textures": {"layer0": f"{NS}:item/card_back"}})
     write_json(os.path.join(OUT, "assets", NS, "font", "cards.json"), {"providers": providers})
 
+    # Menu de choix des arènes : bannière, boutons, flèches (images fournies + variantes générées)
+    assets = os.path.join(ROOT, "tools", "assets")
+    flat = {
+        "arena_banner": Image.open(os.path.join(assets, "arena_banner.png")).convert("RGBA"),
+        "btn_jouer": Image.open(os.path.join(assets, "btn_jouer.png")).convert("RGBA"),
+        "btn_en_cours": Image.open(os.path.join(assets, "btn_en_cours.png")).convert("RGBA"),
+        "arrow_left": Image.open(os.path.join(assets, "arrow_left.png")).convert("RGBA"),
+        "arrow_right": Image.open(os.path.join(assets, "arrow_right.png")).convert("RGBA"),
+    }
+    empty = Image.open(os.path.join(assets, "btn_vide.png")).convert("RGBA")
+    flat["btn_quitter"] = label_button(empty, "QUITTER", (255, 135, 20))
+    flat["btn_complet"] = label_button(empty, "COMPLET", (150, 150, 160))
+    flat["btn_indispo"] = label_button(empty, "BIENTÔT", (150, 150, 160))
+    # Menus de jeu : boutons vides colorés (le texte est ajouté en jeu), bandeaux de titre, bannières de joueur,
+    # jauges de voix et sablier
+    for cname, col in BUTTON_COLORS.items():
+        flat["bt_" + cname] = tint(empty, col)
+    wide = btn_slice(empty, 460, 52)
+    for tid, col in TITLE_COLORS.items():
+        flat["title_" + tid] = tint(wide, tuple(int(c * 0.85) for c in col))
+    pbar = btn_slice(empty, 520, 64)
+    flat["player_bar"] = tint(pbar, (30, 62, 140), 235)
+    flat["player_bar_me"] = tint(pbar, (196, 140, 16))
+    flat["player_bar_off"] = tint(pbar, (70, 74, 90), 235)
+    flat["gauge_bg"] = bar(64, 8, (8, 18, 48), (16, 30, 70))
+    flat["gauge_gold"] = bar(64, 8, (255, 220, 90), (220, 150, 20), None)
+    flat["gauge_red"] = bar(64, 8, (255, 90, 70), (170, 20, 20), None)
+    flat["timer_bg"] = bar(128, 8, (8, 18, 48), (16, 30, 70))
+    flat["timer_fill"] = bar(128, 8, (230, 245, 255), (120, 200, 255), None)
+    flat["timer_red"] = bar(128, 8, (255, 120, 100), (210, 30, 30), None)
+    for name, img in flat.items():
+        img.save(os.path.join(tex, "item", name + ".png"))
+        write_json(os.path.join(OUT, "assets", NS, "models", "item", name + ".json"), flat_model(f"{NS}:item/{name}"))
+        write_json(os.path.join(OUT, "assets", NS, "items", name + ".json"),
+                   {"model": {"type": "minecraft:model", "model": f"{NS}:item/{name}"}})
+
+    # Panneaux des menus 3D : un par rapport largeur/hauteur (1.0 → 3.0), bords nets à toute taille
+    for r in range(10, 31):
+        name = f"panel_{r}"
+        make_panel(r / 10).save(os.path.join(tex, "item", name + ".png"))
+        write_json(os.path.join(OUT, "assets", NS, "models", "item", name + ".json"),
+                   {"parent": "minecraft:item/generated", "textures": {"layer0": f"{NS}:item/{name}"}})
+        write_json(os.path.join(OUT, "assets", NS, "items", name + ".json"),
+                   {"model": {"type": "minecraft:model", "model": f"{NS}:item/{name}"}})
+
     # Tête de loup (rejoindre) et variante « quitter »
     for name, img in (("wolf_head", make_wolf_head(False)), ("wolf_head_leave", make_wolf_head(True))):
         img.save(os.path.join(tex, "item", name + ".png"))
@@ -512,7 +769,8 @@ def main():
     gui_prov = [{"type": "space", "advances": {"": -8}}]
     gui_previews = []
     for ti, (tid, title, color) in enumerate(THEMES):
-        g = make_admin_gui(title, color) if tid == "admin" else make_gui(title, color)
+        g = (make_admin_gui(title, color) if tid == "admin"
+             else make_arena_gui(title, color) if tid == "arenas" else make_gui(title, color))
         gui_previews.append(g)
         g.save(os.path.join(tex, "font", f"gui_{tid}.png"))
         gui_prov.append({"type": "bitmap", "file": f"{NS}:font/gui_{tid}.png",
@@ -526,6 +784,13 @@ def main():
         gui_prov.append({"type": "bitmap", "file": f"{NS}:font/role_{rid}.png",
                          "height": 222, "ascent": 13, "chars": [chr(0xE120 + ri)]})
     write_json(os.path.join(OUT, "assets", NS, "font", "gui.json"), {"providers": gui_prov})
+
+    # Police Archivo Black (textes du menu des arènes) ; repli sur la police Minecraft pour les caractères absents
+    shutil.copy(FONT_ARCHIVO, os.path.join(OUT, "assets", NS, "font", "archivo.ttf"))
+    write_json(os.path.join(OUT, "assets", NS, "font", "archivo.json"), {"providers": [
+        {"type": "ttf", "file": f"{NS}:archivo.ttf", "size": 9.5, "oversample": 8.0, "shift": [0.0, 1.0]},
+        {"type": "reference", "id": "minecraft:default"},
+    ]})
 
     # Masque le libellé « Inventaire » dessiné par-dessus le fond des menus
     for lang in ("fr_fr", "en_us"):
@@ -554,9 +819,9 @@ def main():
     for i, p in enumerate(previews):
         sheet.alpha_composite(p, (8 + i * (CW + 8), 8))
     sheet.save(os.path.join(dist, "apercu_cartes.png"))
-    gs = Image.new("RGBA", (4 * 184 + 8, 2 * 230 + 8), (30, 30, 36, 255))
+    gs = Image.new("RGBA", (5 * 184 + 8, 2 * 230 + 8), (30, 30, 36, 255))
     for i, g in enumerate(gui_previews):
-        gs.alpha_composite(g, (8 + (i % 4) * 184, 8 + (i // 4) * 230))
+        gs.alpha_composite(g, (8 + (i % 5) * 184, 8 + (i // 5) * 230))
     gs.save(os.path.join(dist, "apercu_menus.png"))
     rs = Image.new("RGBA", (4 * 360 + 8, 2 * 452 + 8), (30, 30, 36, 255))
     for i, g in enumerate(role_previews):

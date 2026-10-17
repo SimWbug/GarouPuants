@@ -15,11 +15,23 @@ public final class GamePlayer {
     UUID lover;
     Location seat;
     PlayerSnapshot snapshot;
+    /** Faux joueur de test (admin) : joue tout seul, représenté par un mannequin sur son spawn. */
+    final boolean bot;
+    org.bukkit.entity.Entity body;
 
     GamePlayer(Player player) {
         this.uuid = player.getUniqueId();
         this.name = player.getName();
+        this.bot = false;
     }
+
+    GamePlayer(UUID uuid, String name) {
+        this.uuid = uuid;
+        this.name = name;
+        this.bot = true;
+    }
+
+    public boolean bot() { return bot; }
 
     public UUID uuid() { return uuid; }
     public String name() { return name; }

@@ -44,6 +44,8 @@ public final class HoloMenu {
     }
 
     private static final Map<UUID, HoloMenu> OPEN = new HashMap<>();
+    /** spectateur → joueur suivi */
+    private static final Map<UUID, UUID> WATCHING = new HashMap<>();
     private static Plugin plugin;
     private static long tickCounter;
 
@@ -69,7 +71,12 @@ public final class HoloMenu {
     private final Map<Integer, Element> elements = new LinkedHashMap<>();
     private TextDisplay header;
     private TextDisplay hint;
-    private TextDisplay backdrop;
+    private ItemDisplay backdrop;
+    private double depth = DEPTH;
+    private final Map<Integer, TextDisplay> freeTexts = new HashMap<>();
+    private TextDisplay side;
+    /** Spectateurs qui regardent par les yeux de ce joueur : ils voient aussi son menu. */
+    private final java.util.Set<UUID> watchers = new java.util.HashSet<>();
     private Element hovered;
     private long lastClick = -10;
     private boolean closed;
@@ -99,8 +106,12 @@ public final class HoloMenu {
         close(player);
         HoloMenu holo = new HoloMenu(player, menu, handler);
         OPEN.put(player.getUniqueId(), holo);
+        for (Map.Entry<UUID, UUID> w : WATCHING.entrySet()) {
+            if (w.getValue().equals(player.getUniqueId())) holo.watchers.add(w.getKey());
+        }
         menu.onRender(holo::rebuild);
         holo.rebuild();
+        holo.unfold();
         holo.sound("block.amethyst_block.resonate", 0.6f, 1.4f);
     }
 
@@ -115,16 +126,61 @@ public final class HoloMenu {
 
     public static void close(Player player) {
         HoloMenu holo = OPEN.remove(player.getUniqueId());
-        if (holo != null) holo.destroy();
+        if (holo != null) holo.destroy(true);
     }
 
     public static void closeAll() {
-        for (HoloMenu holo : new ArrayList<>(OPEN.values())) holo.destroy();
+        for (HoloMenu holo : new ArrayList<>(OPEN.values())) holo.destroy(false);
         OPEN.clear();
     }
 
     public LgMenu menu() {
         return menu;
+    }
+
+    /** Le spectateur voit désormais le menu 3D du joueur qu'il suit (et les suivants qu'il ouvrira). */
+    public static void watch(Player spectator, Player target) {
+        unwatch(spectator);
+        WATCHING.put(spectator.getUniqueId(), target.getUniqueId());
+        HoloMenu holo = OPEN.get(target.getUniqueId());
+        if (holo != null && !holo.closed) holo.addWatcher(spectator);
+    }
+
+    public static void unwatch(Player spectator) {
+        UUID target = WATCHING.remove(spectator.getUniqueId());
+        if (target == null) return;
+        HoloMenu holo = OPEN.get(target);
+        if (holo != null) holo.removeWatcher(spectator);
+    }
+
+    private void addWatcher(Player p) {
+        if (!watchers.add(p.getUniqueId())) return;
+        for (org.bukkit.entity.Entity e : entities()) p.showEntity(plugin, e);
+    }
+
+    private void removeWatcher(Player p) {
+        if (!watchers.remove(p.getUniqueId())) return;
+        for (org.bukkit.entity.Entity e : entities()) p.hideEntity(plugin, e);
+    }
+
+    private List<org.bukkit.entity.Entity> entities() {
+        List<org.bukkit.entity.Entity> out = new ArrayList<>();
+        for (Element el : elements.values()) {
+            if (el.icon != null) out.add(el.icon);
+            if (el.label != null) out.add(el.label);
+        }
+        for (org.bukkit.entity.Entity e : new org.bukkit.entity.Entity[]{header, hint, backdrop, side}) if (e != null) out.add(e);
+        out.addAll(freeTexts.values());
+        return out;
+    }
+
+    /** Montre une entité du menu à son joueur et aux spectateurs qui le suivent. */
+    private void reveal(org.bukkit.entity.Entity e) {
+        player.showEntity(plugin, e);
+        for (UUID id : watchers) {
+            Player w = Bukkit.getPlayer(id);
+            if (w != null) w.showEntity(plugin, e);
+        }
     }
 
     // ------------------------------------------------------------------ construction
@@ -135,13 +191,34 @@ public final class HoloMenu {
             close(player);
             return;
         }
+        if (menu.custom()) {
+            rebuildCustom();
+            return;
+        }
         boolean sheet = menu.theme() == MenuTheme.SHEET;
+        boolean summary = menu.theme() == MenuTheme.SUMMARY;
         Map<Integer, ItemStack> items = menu.items();
         Map<Integer, Placement> wanted = new LinkedHashMap<>();
 
         double bottomY;
         double width;
-        if (sheet) {
+        if (summary) {
+            // à gauche : les cartes de tous les joueurs (4 par ligne) ; à droite : l'historique
+            List<Integer> heads = new ArrayList<>();
+            for (int slot : LgMenu.HEAD_SLOTS) if (items.containsKey(slot)) heads.add(slot);
+            int perRow = 4;
+            for (int i = 0; i < heads.size(); i++) {
+                int row = i / perRow;
+                int inRow = Math.min(perRow, heads.size() - row * perRow);
+                int col = i % perRow;
+                double x = -1.45 + (col - (inRow - 1) / 2.0) * 0.62;
+                double y = 0.45 - row * 0.85;
+                wanted.put(heads.get(i), new Placement(x, y, 0.36f, 0.26, true, y - 0.24));
+            }
+            int rows = Math.max(1, (heads.size() + perRow - 1) / perRow);
+            bottomY = Math.min(-1.25, 0.45 - (rows - 1) * 0.85 - 0.24 - 0.3 - 0.35);
+            width = 6.0;
+        } else if (sheet) {
             ItemStack card = items.get(LgMenu.SHEET_CARD);
             if (card != null) wanted.put(LgMenu.SHEET_CARD, new Placement(-1.0, 0.15, 1.5f, 0.75, true, Double.NaN));
             ItemStack close = items.get(LgMenu.MIDDLE_BUTTON);
@@ -203,29 +280,108 @@ public final class HoloMenu {
 
         // titre / texte d'en-tête
         Component headerText = sheet ? sheetText(items.get(LgMenu.INFO_SLOT)) : headerText(items.get(LgMenu.INFO_SLOT));
-        if (sheet) {
+        if (summary) {
+            header = text(header, at(0, 0.88, DEPTH), headerText, 0.62f, 300, TextDisplay.TextAlignment.CENTER,
+                    Color.fromARGB(0, 0, 0, 0));
+            ItemStack hist = items.get(LgMenu.HISTORY_SLOT);
+            List<Component> lines = new ArrayList<>();
+            lines.add(Component.text("DÉROULÉ DE LA PARTIE", NamedTextColor.GOLD).decorate(TextDecoration.BOLD));
+            if (hist != null && hist.getItemMeta() != null && hist.getItemMeta().lore() != null) lines.addAll(hist.getItemMeta().lore());
+            double topY = 0.62;
+            double origin = topY - lines.size() * LINE * 0.4 - 0.03;
+            side = text(side, at(1.5, origin, DEPTH), Component.join(JoinConfiguration.newlines(), lines), 0.4f, 260,
+                    TextDisplay.TextAlignment.LEFT, Color.fromARGB(90, 0, 0, 0));
+            bottomY = Math.min(bottomY, origin - 0.4);
+        } else if (sheet) {
             header = text(header, at(0.95, -0.7, DEPTH), headerText, 0.52f, 150, TextDisplay.TextAlignment.LEFT,
                     Color.fromARGB(0, 0, 0, 0));
         } else {
             header = text(header, at(0, 0.68, DEPTH), headerText, 0.6f, 220, TextDisplay.TextAlignment.CENTER,
                     Color.fromARGB(0, 0, 0, 0));
         }
-        Component hintText = Component.text("Vise avec le viseur · clic pour choisir · accroupis-toi pour fermer", NamedTextColor.GRAY);
+        Component hintText = summary
+                ? Component.text("Vise une carte pour les détails · accroupis-toi pour fermer", TextColor.color(0xBFD9FF))
+                : Component.text("Vise avec le viseur · clic pour choisir · accroupis-toi pour fermer", TextColor.color(0xBFD9FF));
         hint = text(hint, at(0, bottomY + 0.08, DEPTH), hintText, 0.38f, 400, TextDisplay.TextAlignment.CENTER,
                 Color.fromARGB(0, 0, 0, 0));
 
-        // panneau de fond semi-transparent
-        double top = sheet ? 1.5 : 1.45;
-        double height = top - bottomY;
-        TextColor c = menu.theme().color();
-        Color panel = Color.fromARGB(150, c.red() / 6, c.green() / 6, c.blue() / 6);
+        placePanel(width, top_(sheet, summary), bottomY - 0.1);
+    }
+
+    private static double top_(boolean sheet, boolean summary) {
+        return sheet ? 1.5 : summary ? 1.55 : 1.45;
+    }
+
+    /** Panneau de fond : cadre bleu du resource pack, choisi selon les proportions du menu. */
+    private void placePanel(double width, double top, double panelBottom) {
         // le panneau est 0,3 bloc plus loin : on l'agrandit d'autant pour qu'il couvre bien tout le menu
-        double k = (DEPTH + 0.3) / DEPTH;
-        double panelBottom = bottomY - 0.1;
-        backdrop = text(backdrop, at(0, panelBottom * k, DEPTH + 0.3), Component.text(" "), 1f, 200,
-                TextDisplay.TextAlignment.CENTER, panel);
+        double k = (depth + 0.3) / depth;
+        double height = top - panelBottom;
+        int ratio = (int) Math.max(10, Math.min(30, Math.round(width / height * 10)));
+        ItemStack panelItem = new ItemStack(org.bukkit.Material.PAPER);
+        ItemMeta pm = panelItem.getItemMeta();
+        pm.setItemModel(new org.bukkit.NamespacedKey("lgt", "panel_" + ratio));
+        panelItem.setItemMeta(pm);
+        Location panelAt = at(0, (top + panelBottom) / 2 * k, depth + 0.3);
+        if (backdrop == null || !backdrop.isValid()) {
+            backdrop = panelAt.getWorld().spawn(panelAt, ItemDisplay.class, e -> {
+                prepare(e);
+                e.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.NONE);
+            });
+            reveal(backdrop);
+        } else if (backdrop.getLocation().distanceSquared(panelAt) > 0.0001) {
+            backdrop.teleport(panelAt);
+        }
+        backdrop.setItemStack(panelItem);
         backdrop.setTransformation(new Transformation(new Vector3f(), new Quaternionf(),
-                new Vector3f((float) (width * k / 0.15), (float) ((top - panelBottom) * k / 0.275), 1f), new Quaternionf()));
+                new Vector3f((float) (width * k), (float) (height * k), 0.05f), new Quaternionf()));
+    }
+
+    /** Menu en mise en page libre : chaque objet et chaque texte à la position donnée par le menu. */
+    private void rebuildCustom() {
+        LgMenu.Panel panel = menu.panel();
+        depth = panel.depth();
+        Map<Integer, ItemStack> items = menu.items();
+        Map<Integer, Placement> wanted = new LinkedHashMap<>();
+        for (Map.Entry<Integer, LgMenu.Layout> e : menu.layouts().entrySet()) {
+            LgMenu.Layout l = e.getValue();
+            wanted.put(e.getKey(), new Placement(l.x(), l.y(), l.sx(), l.radius(), menu.clickable(e.getKey()), Double.NaN,
+                    l.sy(), l.z(), l.flat(), l.leftAnchored()));
+        }
+        elements.entrySet().removeIf(e -> {
+            if (wanted.containsKey(e.getKey())) return false;
+            e.getValue().remove();
+            if (hovered == e.getValue()) hovered = null;
+            return true;
+        });
+        for (Map.Entry<Integer, Placement> e : wanted.entrySet()) {
+            ItemStack item = items.get(e.getKey());
+            Element el = elements.get(e.getKey());
+            if (el == null) {
+                el = new Element(e.getKey(), e.getValue());
+                elements.put(e.getKey(), el);
+                el.spawn(item);
+            } else {
+                el.update(item, e.getValue());
+            }
+        }
+        // textes
+        Map<Integer, LgMenu.Text> texts = menu.texts();
+        freeTexts.entrySet().removeIf(e -> {
+            if (texts.containsKey(e.getKey())) return false;
+            e.getValue().remove();
+            return true;
+        });
+        for (Map.Entry<Integer, LgMenu.Text> e : texts.entrySet()) {
+            LgMenu.Text t = e.getValue();
+            int lines = 1 + PlainTextComponentSerializer.plainText().serialize(t.text()).split("\n", -1).length - 1;
+            double origin = t.y() - lines * LINE * t.scale() / 2;
+            TextDisplay td = text(freeTexts.get(e.getKey()), at(t.x(), origin, depth + t.z()), t.text(), t.scale(),
+                    t.lineWidth(), TextDisplay.TextAlignment.CENTER, Color.fromARGB(0, 0, 0, 0));
+            freeTexts.put(e.getKey(), td);
+        }
+        placePanel(panel.width(), panel.top(), panel.bottom());
+        updateHint();
     }
 
     private Component headerText(ItemStack info) {
@@ -269,7 +425,19 @@ public final class HoloMenu {
             Vector to = el.center.toVector().subtract(origin);
             double dist = to.length();
             if (dist < 0.1) continue;
-            double score = dir.angle(to) / Math.atan(el.placement.radius / dist);
+            double score;
+            if (el.placement.flat()) {
+                // rectangle : point visé dans le plan du menu
+                double along = dir.dot(forward);
+                if (along <= 0.05) continue;
+                double t = to.dot(forward) / along;
+                Vector hit = origin.clone().add(dir.clone().multiply(t)).subtract(el.center.toVector());
+                double hx = Math.abs(hit.dot(right)) / (el.placement.scale() / 2);
+                double hy = Math.abs(hit.getY()) / (el.placement.sy() / 2);
+                score = Math.max(hx, hy) * 0.999;
+            } else {
+                score = dir.angle(to) / Math.atan(el.placement.radius / dist);
+            }
             if (score < bestScore) {
                 bestScore = score;
                 best = el;
@@ -282,7 +450,37 @@ public final class HoloMenu {
                 best.highlight(true);
                 sound("block.note_block.hat", 0.35f, 1.8f);
             }
+            updateHint();
         }
+        if (tickCounter % 20 == 0) updateTimer();
+    }
+
+    /** Ligne d'aide du tableau : décrit l'élément visé (« Clique pour voter contre Pierre »). */
+    private void updateHint() {
+        TextDisplay td = freeTexts.get(BoardLayout.HINT_TEXT);
+        if (td == null || !td.isValid()) return;
+        String h = hovered == null ? null : menu.hint(hovered.slot);
+        td.text(h == null ? BoardLayout.defaultHint()
+                : Component.text("▶ " + h, NamedTextColor.YELLOW).font(BoardLayout.ARCHIVO));
+    }
+
+    /** Sablier : la jauge se vide en continu (interpolation sur 1 s), rouge dans les 10 dernières secondes. */
+    private void updateTimer() {
+        Element fill = elements.get(BoardLayout.TIMER_FILL);
+        if (fill == null || !menu.custom()) return;
+        int left = menu.timeLeft();
+        if (left < 0) return;
+        int total = menu.timeTotal();
+        double frac = Math.max(0, Math.min(1, (left - 1) / (double) total));
+        float w = (float) Math.max(0.001, menu.timerWidth() * frac);
+        fill.placement = new Placement(fill.placement.x(), fill.placement.y(), w, 0, false, Double.NaN,
+                fill.placement.sy(), fill.placement.z(), true, true);
+        fill.icon.setInterpolationDelay(0);
+        fill.icon.setInterpolationDuration(20);
+        fill.icon.setTransformation(fill.size(1f));
+        if (left <= 10) fill.icon.setItemStack(BoardLayout.flat("timer_red"));
+        TextDisplay td = freeTexts.get(BoardLayout.TIMER_TEXT);
+        if (td != null && td.isValid()) td.text(BoardLayout.timerText(Math.max(0, left)));
     }
 
     /** Appelé par les événements de clic (gauche ou droit). */
@@ -298,14 +496,71 @@ public final class HoloMenu {
         return true;
     }
 
-    private void destroy() {
+    private void destroy(boolean animate) {
+        if (closed) return;
         closed = true;
-        for (Element el : elements.values()) el.remove();
-        elements.clear();
-        if (header != null) header.remove();
-        if (hint != null) hint.remove();
-        if (backdrop != null) backdrop.remove();
         menu.onRender(null);
+        List<org.bukkit.entity.Entity> all = entities();
+        elements.clear();
+        freeTexts.clear();
+        header = hint = null;
+        backdrop = null;
+        side = null;
+        if (!animate || plugin == null || !plugin.isEnabled()) {
+            for (org.bukkit.entity.Entity e : all) e.remove();
+            return;
+        }
+        // le panneau se replie vers le centre, le contenu rétrécit, puis tout disparaît
+        ItemDisplay panel = null;
+        for (org.bukkit.entity.Entity e : all) {
+            if (!(e instanceof Display d) || !d.isValid()) continue;
+            Transformation t = d.getTransformation();
+            boolean isPanel = d instanceof ItemDisplay id && id.getItemStack() != null && id.getItemStack().hasItemMeta()
+                    && id.getItemStack().getItemMeta().hasItemModel()
+                    && id.getItemStack().getItemMeta().getItemModel().getKey().startsWith("panel_");
+            d.setInterpolationDelay(0);
+            d.setInterpolationDuration(isPanel ? 5 : 3);
+            d.setTransformation(shrink(t, isPanel));
+        }
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            for (org.bukkit.entity.Entity e : all) e.remove();
+        }, 6L);
+    }
+
+    /** Ouverture : le panneau se déplie du centre vers les bords, puis le contenu apparaît. */
+    private void unfold() {
+        Map<Display, Transformation> targets = new HashMap<>();
+        for (org.bukkit.entity.Entity e : entities()) {
+            if (!(e instanceof Display d)) continue;
+            Transformation t = d.getTransformation();
+            targets.put(d, t);
+            d.setTransformation(shrink(t, d == backdrop));
+        }
+        Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (closed) return;
+            for (Map.Entry<Display, Transformation> en : targets.entrySet()) {
+                Display d = en.getKey();
+                if (!d.isValid()) continue;
+                boolean isPanel = d == backdrop;
+                // si l'élément a changé entre-temps (rafraîchissement), on garde sa nouvelle taille
+                if (!d.getTransformation().equals(shrink(en.getValue(), isPanel))) continue;
+                d.setInterpolationDelay(isPanel ? 0 : 3);
+                d.setInterpolationDuration(isPanel ? 6 : 4);
+                d.setTransformation(en.getValue());
+            }
+        }, 2L);
+    }
+
+    private static Transformation shrink(Transformation t, boolean panel) {
+        Vector3f sc = new Vector3f(t.getScale());
+        Vector3f tr = new Vector3f(t.getTranslation());
+        if (panel) {
+            sc.x *= 0.02f;
+        } else {
+            sc.mul(0.01f);
+            tr.mul(0.01f);
+        }
+        return new Transformation(tr, new Quaternionf(t.getLeftRotation()), sc, new Quaternionf(t.getRightRotation()));
     }
 
     // ------------------------------------------------------------------ outils
@@ -341,7 +596,7 @@ public final class HoloMenu {
                 e.setSeeThrough(false);
                 e.setDefaultBackground(false);
             });
-            player.showEntity(plugin, td);
+            reveal(td);
         } else if (td.getLocation().distanceSquared(loc) > 0.0001) {
             td.teleport(loc);
         }
@@ -358,7 +613,16 @@ public final class HoloMenu {
         player.playSound(Sound.sound(Key.key(key), Sound.Source.MASTER, volume, pitch));
     }
 
-    private record Placement(double x, double y, float scale, double radius, boolean clickable, double labelY) {}
+    private record Placement(double x, double y, float scale, double radius, boolean clickable, double labelY,
+                             float sy, double z, boolean flat, boolean left) {
+        Placement(double x, double y, float scale, double radius, boolean clickable, double labelY) {
+            this(x, y, scale, radius, clickable, labelY, scale, 0, false, false);
+        }
+
+        float hover() {
+            return flat ? (scale > 1.8f ? 1.025f : 1.07f) : HOVER_FACTOR;
+        }
+    }
 
     /** Un objet du menu : icône 3D + étiquette en dessous. */
     private final class Element {
@@ -373,7 +637,13 @@ public final class HoloMenu {
         Element(int slot, Placement placement) {
             this.slot = slot;
             this.placement = placement;
-            this.center = at(placement.x(), placement.y(), DEPTH);
+            this.center = at(placement.x(), placement.y(), depth + placement.z());
+        }
+
+        Transformation size(float factor) {
+            Transformation t = scaleOf(placement.scale() * factor, placement.sy() * factor);
+            if (placement.left()) t.getTranslation().set(placement.scale() * factor / 2, 0, 0);
+            return t;
         }
 
         void spawn(ItemStack stack) {
@@ -381,19 +651,21 @@ public final class HoloMenu {
             icon = center.getWorld().spawn(center, ItemDisplay.class, e -> {
                 prepare(e);
                 e.setItemStack(stack);
-                e.setItemDisplayTransform(ItemDisplay.ItemDisplayTransform.GUI);
-                e.setTransformation(scaleOf(placement.scale()));
-                e.setGlowColorOverride(toColor(menu.theme().color()));
+                e.setItemDisplayTransform(placement.flat() ? ItemDisplay.ItemDisplayTransform.NONE
+                        : ItemDisplay.ItemDisplayTransform.GUI);
+                e.setTransformation(size(1f));
+                e.setGlowColorOverride(placement.flat() ? Color.WHITE : toColor(menu.theme().color()));
             });
-            player.showEntity(plugin, icon);
+            reveal(icon);
             updateLabel();
         }
 
         void update(ItemStack stack, Placement p) {
-            boolean moved = p.x() != placement.x() || p.y() != placement.y();
+            boolean moved = p.x() != placement.x() || p.y() != placement.y() || p.z() != placement.z();
+            boolean resized = p.scale() != placement.scale() || p.sy() != placement.sy();
             this.placement = p;
             if (moved) {
-                center = at(p.x(), p.y(), DEPTH);
+                center = at(p.x(), p.y(), depth + p.z());
                 icon.teleport(center);
             }
             if (!stack.equals(item)) {
@@ -401,7 +673,11 @@ public final class HoloMenu {
                 icon.setItemStack(stack);
             }
             updateLabel();
-            if (moved) icon.setTransformation(scaleOf(placement.scale() * (lit ? HOVER_FACTOR : 1f)));
+            if (moved || resized) {
+                icon.setInterpolationDelay(0);
+                icon.setInterpolationDuration(4);
+                icon.setTransformation(size(lit ? placement.hover() : 1f));
+            }
         }
 
         void updateLabel() {
@@ -418,7 +694,7 @@ public final class HoloMenu {
             // pour qu'en s'agrandissant (survol) elle descende au lieu de recouvrir l'icône
             double top = placement.labelY() - (lit ? 0.06 : 0);
             double origin = top - lines.size() * LINE * scale - 0.03;
-            Location loc = at(placement.x(), origin, DEPTH - (lit ? 0.05 : 0));
+            Location loc = at(placement.x(), origin, depth - (lit ? 0.05 : 0));
             TextColor c = menu.theme().color();
             Color bg = lit ? Color.fromARGB(215, c.red() / 3, c.green() / 3, c.blue() / 3)
                     : Color.fromARGB(110, 8, 8, 12);
@@ -446,7 +722,7 @@ public final class HoloMenu {
             lit = on;
             icon.setInterpolationDelay(0);
             icon.setInterpolationDuration(3);
-            icon.setTransformation(scaleOf(placement.scale() * (on ? HOVER_FACTOR : 1f)));
+            icon.setTransformation(size(on ? placement.hover() : 1f));
             icon.setGlowing(on);
             updateLabel();
         }
@@ -454,12 +730,12 @@ public final class HoloMenu {
         void pulse() {
             icon.setInterpolationDelay(0);
             icon.setInterpolationDuration(2);
-            icon.setTransformation(scaleOf(placement.scale() * 1.5f));
+            icon.setTransformation(size(placement.flat() ? 1.15f : 1.5f));
             Bukkit.getScheduler().runTaskLater(plugin, () -> {
                 if (icon != null && icon.isValid()) {
                     icon.setInterpolationDelay(0);
                     icon.setInterpolationDuration(3);
-                    icon.setTransformation(scaleOf(placement.scale() * (lit ? HOVER_FACTOR : 1f)));
+                    icon.setTransformation(size(lit ? placement.hover() : 1f));
                 }
             }, 3L);
         }
@@ -471,7 +747,11 @@ public final class HoloMenu {
     }
 
     private static Transformation scaleOf(float s) {
-        return new Transformation(new Vector3f(), new Quaternionf(), new Vector3f(s, s, s), new Quaternionf());
+        return scaleOf(s, s);
+    }
+
+    private static Transformation scaleOf(float sx, float sy) {
+        return new Transformation(new Vector3f(), new Quaternionf(), new Vector3f(sx, sy, Math.min(sx, sy)), new Quaternionf());
     }
 
     private static Color toColor(TextColor c) {

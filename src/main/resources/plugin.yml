@@ -8,7 +8,7 @@ authors: [Simon]
 commands:
   lg:
     description: Mini-jeu Loup-Garou
-    usage: /lg <join|leave|start|stop|setcenter|setlobby|menu|carte|roles|reload>
+    usage: /lg <arenes|join|leave|arena|admin|start|stop|menu|carte|test>
     aliases: [loupgarou]
 
 permissions:
