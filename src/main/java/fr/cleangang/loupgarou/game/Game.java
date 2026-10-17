@@ -491,16 +491,7 @@ public final class Game {
             }
             return;
         }
-        for (GamePlayer actor : actors) {
-            Player pl = actor.player();
-            if (pl == null) continue;
-            blind(pl, false);
-            pl.showTitle(Title.title(Component.text("Réveille-toi", role.color()),
-                    Component.text(role.displayName() + ", à toi de jouer !", NamedTextColor.GRAY),
-                    Title.Times.times(Ticks.duration(5), Ticks.duration(30), Ticks.duration(5))));
-            sound(pl, "block.note_block.chime", 1f, 1.2f);
-            opener.open(actor, pl);
-        }
+        // la phase démarre d'abord (le sablier des menus connaît ainsi sa durée), puis les menus s'ouvrent
         runPhase(p, name, timer(timerKey), color, () -> {
             for (GamePlayer actor : actors) {
                 Player pl = actor.player();
@@ -510,6 +501,20 @@ public final class Game {
             onEnd.run();
             nextNightStep();
         });
+        for (GamePlayer actor : actors) {
+            Player pl = actor.player();
+            if (pl == null) continue;
+            blind(pl, false);
+            pl.showTitle(Title.title(Component.text("Réveille-toi", role.color()),
+                    Component.text(role.displayName() + ", à toi de jouer !", NamedTextColor.GRAY),
+                    Title.Times.times(Ticks.duration(5), Ticks.duration(30), Ticks.duration(5))));
+            sound(pl, "block.note_block.chime", 1f, 1.2f);
+            try {
+                opener.open(actor, pl);
+            } catch (RuntimeException ex) {
+                plugin.getLogger().log(java.util.logging.Level.SEVERE, "Menu impossible à ouvrir pour " + pl.getName(), ex);
+            }
+        }
     }
 
     @FunctionalInterface
@@ -2209,7 +2214,22 @@ public final class Game {
     private void endPhase() {
         Runnable r = phaseEnd;
         phaseEnd = null;
-        if (r != null) r.run();
+        if (r == null) return;
+        try {
+            r.run();
+        } catch (RuntimeException ex) {
+            // un bug ne doit jamais bloquer la partie : on l'écrit dans la console et on passe à la suite
+            plugin.getLogger().log(java.util.logging.Level.SEVERE, "Erreur pendant la phase " + phase + " — la partie continue", ex);
+            if (state != State.PLAYING || phaseEnd != null) return;
+            try {
+                if (phase.isNight() || phase == Phase.NIGHTFALL) nextNightStep();
+                else startNight();
+            } catch (RuntimeException again) {
+                plugin.getLogger().log(java.util.logging.Level.SEVERE, "Impossible de reprendre la partie, arrêt", again);
+                broadcast(Component.text("Erreur interne : la partie est arrêtée (voir la console).", NamedTextColor.RED));
+                forceStop();
+            }
+        }
     }
 
     private void endPhaseLater(long ticks) {

@@ -102,7 +102,8 @@ public final class LgMenu implements InventoryHolder {
     }
 
     public void set(int slot, ItemStack item, Runnable action) {
-        inventory.setItem(slot, item);
+        // les éléments des menus 3D ont des numéros au-delà des 54 cases de l'inventaire
+        if (slot >= 0 && slot < inventory.getSize()) inventory.setItem(slot, item);
         if (item != null) items.put(slot, item);
         if (action != null) actions.put(slot, action);
     }

@@ -467,7 +467,12 @@ public final class HoloMenu {
     /** Sablier : la jauge se vide en continu (interpolation sur 1 s), rouge dans les 10 dernières secondes. */
     private void updateTimer() {
         Element fill = elements.get(BoardLayout.TIMER_FILL);
-        if (fill == null || !menu.custom()) return;
+        if (fill == null) {
+            // menu ouvert juste avant le début de la phase : on le redessine pour faire apparaître le sablier
+            if (menu.custom() && menu.timeLeft() >= 0 && menu.layouts().containsKey(9100)) menu.render();
+            return;
+        }
+        if (!menu.custom()) return;
         int left = menu.timeLeft();
         if (left < 0) return;
         int total = menu.timeTotal();
